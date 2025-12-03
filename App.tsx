@@ -7,15 +7,11 @@ import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { DiffViewer } from './components/DiffViewer';
 import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
+import { AudioVisualizer } from './components/AudioVisualizer';
+import { DictationInput } from './components/DictationInput';
+import { useVoiceInput } from './hooks/useVoiceInput';
 import { translateText, refineText, validateApiKey } from './services/geminiService';
 import { TranslationRecord, ToneOption, CustomTone, ContextMessage, UsageSession, UsageMetadata } from './types';
-
-// Add type for webkitSpeechRecognition
-declare global {
-  interface Window {
-    webkitSpeechRecognition: any;
-  }
-}
 
 const STANDARD_TONES_MAP: Record<string, string> = {
   'standard': 'Correct grammar, spelling, and flow. Minimal stylistic changes.',
@@ -50,7 +46,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [history, setHistory] = useState<TranslationRecord[]>([]);
   const [newItemId, setNewItemId] = useState<string | null>(null);
 
@@ -73,19 +68,23 @@ const App: React.FC = () => {
   const [originalInput, setOriginalInput] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
 
-  // Browser Capability State
-  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
-
   // Estimated length for adaptive skeleton
   const [estimatedLength, setEstimatedLength] = useState<number>(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // Kept for logic if needed, but not rendered if diff not showing
+
+  // Voice Input Hook
+  const [voiceState, voiceActions] = useVoiceInput();
+  const { isListening, transcript, interimTranscript, volume, isSupported: isSpeechSupported } = voiceState;
+  const { startListening, stopListening, resetTranscript } = voiceActions;
+
+  // Interaction Refs for Hold-to-Talk
+  const holdStartTimeRef = useRef<number>(0);
+  const startedListeningOnPressRef = useRef<boolean>(false);
 
   // Skeleton delay threshold (ms) - don't show skeleton for fast responses
   const SKELETON_DELAY = 180;
-  const baseTextRef = useRef<string>('');
   const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleGateSuccess = (key: string) => {
@@ -180,6 +179,17 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('verbum_model', model); }, [model]);
   useEffect(() => { localStorage.setItem('verbum_api_key', apiKey); }, [apiKey]);
   useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
+
+  // Sync Voice Transcript to Input
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => {
+        const prefix = prev && !prev.endsWith(' ') ? ' ' : '';
+        return prev + prefix + transcript;
+      });
+      resetTranscript();
+    }
+  }, [transcript, resetTranscript]);
 
   const getRefinementInstruction = () => {
     let instruction = STANDARD_TONES_MAP[tone as string];
@@ -359,8 +369,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+  const handleTextChange = (newText: string) => {
+    setInput(newText);
     // If user starts editing, we assume they accept the changes so far,
     // Clear diff state if they edit manually to avoid sync issues.
     if (showDiff) setShowDiff(false);
@@ -393,64 +403,38 @@ const App: React.FC = () => {
     if (tone === id) setTone('standard');
   };
 
-  const toggleListening = () => {
-    // Clear diff if active before starting
-    if (showDiff) setShowDiff(false);
+  // --- Voice Input Handlers ---
+  const handleMicPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    if (!isSpeechSupported || showDiff) return;
 
     if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
+      // If listening, this press implies a stop toggle
+      stopListening();
+      startedListeningOnPressRef.current = false;
+    } else {
+      startListening();
+      holdStartTimeRef.current = Date.now();
+      startedListeningOnPressRef.current = true;
     }
+  };
 
-    if (!isSpeechSupported) {
-      return;
+  const handleMicPointerUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+    if (!startedListeningOnPressRef.current) return;
+
+    const duration = Date.now() - holdStartTimeRef.current;
+    // If held for more than 400ms, treat as "Hold-to-Talk" -> Stop on release
+    if (duration > 400) {
+      stopListening();
     }
+    // If < 400ms, treat as "Click-to-Toggle" -> Keep listening
 
-    try {
-      const recognition = new window.webkitSpeechRecognition();
-      recognitionRef.current = recognition;
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = navigator.language || 'en-US';
+    startedListeningOnPressRef.current = false;
+  };
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        baseTextRef.current = input;
-      };
-
-      recognition.onresult = (event: any) => {
-        const sessionTranscript = Array.from(event.results)
-          .map((res: any) => res[0].transcript)
-          .join('');
-
-        const prefix = baseTextRef.current ? baseTextRef.current + ' ' : '';
-        setInput(prefix + sessionTranscript);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error === 'no-speech') return;
-        if (event.error === 'aborted') {
-          setIsListening(false);
-          return;
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-        }
-      };
-
-      recognition.start();
-    } catch (error) {
-      console.error("Failed to start speech recognition:", error);
-      setIsListening(false);
-    }
+  const handleMicPointerLeave = (e: React.PointerEvent) => {
+    // Optional: if needed to cancel on drag out, but keeping it simple for now
   };
 
   const showLiquidSkeleton = showSkeleton && loading;
@@ -495,7 +479,11 @@ const App: React.FC = () => {
 
       {/* Input Section */}
       <div className="w-full mb-12 z-20 animate-slide-up">
-        <GlassCard className="p-1" hoverEffect={false}>
+        {/* Added dynamic shadow/border when listening */}
+        <GlassCard
+          className={`p-1 transition-all duration-500 ${isListening ? 'shadow-[0_0_30px_rgba(255,255,255,0.1)] border-white/20' : ''}`}
+          hoverEffect={false}
+        >
           {/* Flex Column Container to prevent overlap */}
           <div className="flex flex-col h-[420px] p-8">
 
@@ -507,13 +495,12 @@ const App: React.FC = () => {
                   newText={input}
                 />
               ) : (
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={handleTextChange}
-                  onKeyDown={handleKeyDown}
+                <DictationInput
+                  text={input}
+                  setText={handleTextChange}
+                  interimTranscript={interimTranscript}
+                  disabled={loading || isRefining}
                   placeholder="Enter text or use dictation..."
-                  readOnly={loading || isRefining}
                   className={`
                     w-full h-full bg-transparent text-2xl font-light text-white placeholder-neutral-800 
                     resize-none focus:outline-none focus:ring-0 leading-relaxed transition-all duration-700
@@ -522,7 +509,6 @@ const App: React.FC = () => {
                     [mask-image:linear-gradient(to_bottom,transparent_0px,black_20px,black_calc(100%-20px),transparent_100%)]
                     py-6
                   `}
-                  spellCheck={false}
                 />
               )}
             </div>
@@ -637,31 +623,28 @@ const App: React.FC = () => {
 
               {/* Right Side: Action Tools */}
               <div className="flex items-center gap-4">
-                {/* Microphone Button */}
+                {/* Microphone Button with Liquid Interface */}
                 {isSpeechSupported && (
-                  <div className="flex items-center gap-3">
-                    {isListening && (
-                      <span className="text-[10px] tracking-widest text-red-400 font-medium uppercase animate-pulse">
-                        REC
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2">
+                    {/* Visualizer Display */}
+                    <div className="w-16 flex justify-center">
+                       <AudioVisualizer isListening={isListening} volume={volume} />
+                    </div>
+
                     <button
-                      onClick={toggleListening}
+                      onPointerDown={handleMicPointerDown}
+                      onPointerUp={handleMicPointerUp}
+                      onPointerLeave={handleMicPointerLeave}
                       disabled={showDiff}
                       className={`
                         p-3 rounded-full transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed
                         ${isListening
-                          ? 'bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] border border-red-500/20'
+                          ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.15)]'
                           : 'bg-transparent text-neutral-600 hover:text-white hover:bg-white/5'}
                       `}
-                      title={isListening ? "Stop Recording" : "Start Dictation"}
+                      title="Hold to dictate, Click to toggle"
                     >
-                      <div className="relative">
-                        {isListening && (
-                          <span className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
-                        )}
-                        <Mic size={20} className={isListening ? "animate-pulse" : ""} />
-                      </div>
+                      <Mic size={20} className={isListening ? "animate-pulse" : ""} />
                     </button>
                   </div>
                 )}
