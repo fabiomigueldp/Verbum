@@ -6,6 +6,7 @@ import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { DiffViewer } from './components/DiffViewer';
+import { ApiKeyGate } from './components/ApiKeyGate';
 import { translateText, refineText } from './services/geminiService';
 import { TranslationRecord, ToneOption, CustomTone, ContextMessage, UsageSession, UsageMetadata } from './types';
 
@@ -53,6 +54,9 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<TranslationRecord[]>([]);
   const [newItemId, setNewItemId] = useState<string | null>(null);
 
+  // Authorization State - Gate control
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // null = checking, false = show gate, true = authorized
+
   // Refinement & Context States
   const [tone, setTone] = useState<ToneOption>('standard');
   const [customTones, setCustomTones] = useState<CustomTone[]>([]);
@@ -87,6 +91,25 @@ const App: React.FC = () => {
   useEffect(() => {
     setIsSpeechSupported('webkitSpeechRecognition' in window);
   }, []);
+
+  // Check authorization on mount
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('verbum_api_key');
+    const envApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    
+    // Check if we have any valid API key source
+    if (savedApiKey?.trim() || envApiKey?.trim()) {
+      setIsAuthorized(true);
+    } else {
+      setIsAuthorized(false);
+    }
+  }, []);
+
+  // Handler for when gate is passed successfully
+  const handleGateSuccess = (key: string) => {
+    setApiKey(key);
+    setIsAuthorized(true);
+  };
 
   // Load persistence
   useEffect(() => {
@@ -418,6 +441,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
+
+      {/* Ignition Gate - API Key Authorization */}
+      {isAuthorized === false && (
+        <ApiKeyGate onSuccess={handleGateSuccess} />
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
