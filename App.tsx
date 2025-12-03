@@ -6,7 +6,7 @@ import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { DiffViewer } from './components/DiffViewer';
-import { ApiKeyGate } from './components/ApiKeyGate';
+import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
 import { translateText, refineText } from './services/geminiService';
 import { TranslationRecord, ToneOption, CustomTone, ContextMessage, UsageSession, UsageMetadata } from './types';
 
@@ -97,10 +97,17 @@ const App: React.FC = () => {
     const savedApiKey = localStorage.getItem('verbum_api_key');
     const envApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
     
+    const isValidSavedKey = savedApiKey && API_KEY_REGEX.test(savedApiKey);
+    const isValidEnvKey = envApiKey && API_KEY_REGEX.test(envApiKey);
+
     // Check if we have any valid API key source
-    if (savedApiKey?.trim() || envApiKey?.trim()) {
+    if (isValidSavedKey || isValidEnvKey) {
       setIsAuthorized(true);
     } else {
+      // Clear invalid key if it exists but fails regex (unless it's null/empty which is just missing)
+      if (savedApiKey && !isValidSavedKey) {
+        localStorage.removeItem('verbum_api_key');
+      }
       setIsAuthorized(false);
     }
   }, []);
@@ -526,7 +533,7 @@ const App: React.FC = () => {
                   <button
                     onClick={() => setShowSettings(true)}
                     className="flex items-center gap-2 px-3 py-2 rounded-full border border-white/10 bg-white/5 text-[10px] tracking-[0.15em] uppercase text-neutral-400 hover:text-white hover:border-white/30 transition-colors"
-                    title="Adicione uma API Key do Gemini (aistudio.google.com/api-keys)"
+                    title="Add a Gemini API Key (aistudio.google.com/api-keys)"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
                     <span>API Key</span>

@@ -7,7 +7,7 @@ interface ApiKeyGateProps {
 }
 
 // Gemini API Key regex pattern
-const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
+export const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
 
 export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
   const [apiKey, setApiKey] = useState('');
