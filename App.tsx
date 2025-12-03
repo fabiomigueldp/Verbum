@@ -3,6 +3,7 @@ import { Send, Loader2, Eraser, Command, Mic, Sparkles, Sliders, Eye, RotateCcw,
 import { v4 as uuidv4 } from 'uuid';
 import { GlassCard } from './components/GlassCard';
 import { TranslationItem } from './components/TranslationItem';
+import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { DiffViewer } from './components/DiffViewer';
 import { translateText, refineText } from './services/geminiService';
@@ -46,9 +47,11 @@ const calculateCost = (modelId: string, inputTokens: number, outputTokens: numbe
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [history, setHistory] = useState<TranslationRecord[]>([]);
+  const [newItemId, setNewItemId] = useState<string | null>(null);
 
   // Refinement & Context States
   const [tone, setTone] = useState<ToneOption>('standard');
@@ -67,11 +70,18 @@ const App: React.FC = () => {
 
   // Browser Capability State
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  
+  // Estimated length for adaptive skeleton
+  const [estimatedLength, setEstimatedLength] = useState<number>(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const baseTextRef = useRef<string>('');
+  const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Skeleton delay threshold (ms) - don't show skeleton for fast responses
+  const SKELETON_DELAY = 180;
 
   // Check capabilities on mount
   useEffect(() => {
@@ -174,10 +184,18 @@ const App: React.FC = () => {
       return;
     }
 
+    // Store estimated length for adaptive skeleton before clearing input
+    setEstimatedLength(input.trim().length);
+    
     setLoading(true);
     // Reset refinement states on new translation
     setOriginalInput(null);
     setShowDiff(false);
+    
+    // Delayed skeleton display - avoid flicker for fast responses
+    skeletonTimerRef.current = setTimeout(() => {
+      setShowSkeleton(true);
+    }, SKELETON_DELAY);
 
     try {
       // 1. Refinement Instruction
@@ -206,14 +224,25 @@ const App: React.FC = () => {
       // Update session stats with usage metadata
       updateSessionStats(result.usageMetadata);
 
+      const newId = uuidv4();
       const newRecord: TranslationRecord = {
-        id: uuidv4(),
+        id: newId,
         original: input.trim(),
         translation: result.translation,
         timestamp: Date.now(),
         sourceLang: result.detectedSourceLanguage as 'pt' | 'en' | 'unknown',
         targetLang: result.detectedSourceLanguage === 'pt' ? 'en' : 'pt',
       };
+
+      // Clear skeleton timer if response came before delay
+      if (skeletonTimerRef.current) {
+        clearTimeout(skeletonTimerRef.current);
+        skeletonTimerRef.current = null;
+      }
+
+      // Mark new item for arrival animation
+      setNewItemId(newId);
+      setTimeout(() => setNewItemId(null), 800);
 
       setHistory(prev => [newRecord, ...prev]);
       setInput('');
@@ -223,7 +252,13 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Translation failed", error);
     } finally {
+      // Clear skeleton timer on completion
+      if (skeletonTimerRef.current) {
+        clearTimeout(skeletonTimerRef.current);
+        skeletonTimerRef.current = null;
+      }
       setLoading(false);
+      setShowSkeleton(false);
     }
   };
 
@@ -377,6 +412,9 @@ const App: React.FC = () => {
       setIsListening(false);
     }
   };
+
+  const showLiquidSkeleton = showSkeleton && loading;
+  const hasHistory = history.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
@@ -609,7 +647,7 @@ const App: React.FC = () => {
       </div>
 
       {/* History Controls */}
-      {history.length > 0 && (
+      {hasHistory && (
         <div className="w-full flex justify-between items-center mb-8 px-2 animate-fade-in opacity-60 hover:opacity-100 transition-opacity duration-500">
           <div className="flex items-center gap-2 text-neutral-600">
             <Command size={14} />
@@ -626,10 +664,20 @@ const App: React.FC = () => {
 
       {/* History List */}
       <div className="w-full relative z-10 pb-20" ref={scrollRef}>
-        {history.length > 0 ? (
+        {(hasHistory || showLiquidSkeleton) ? (
           <div className="space-y-6">
+            {showLiquidSkeleton && (
+              <div className="animate-fade-in">
+                <LiquidSkeleton estimatedLength={estimatedLength} />
+              </div>
+            )}
             {history.map((item) => (
-              <TranslationItem key={item.id} item={item} onDelete={deleteItem} />
+              <TranslationItem 
+                key={item.id} 
+                item={item} 
+                onDelete={deleteItem}
+                isNew={item.id === newItemId}
+              />
             ))}
           </div>
         ) : null}

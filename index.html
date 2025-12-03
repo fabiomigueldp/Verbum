@@ -19,6 +19,32 @@
               'slide-up': 'slideUp 0.4s ease-out',
               'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'spin-slow': 'spin 3s linear infinite',
+              'shimmer': 'shimmer 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              // LiquidSkeleton: Calm, matte glass
+              'drift': 'drift 16s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate',
+              'shimmer-fast': 'shimmerFast 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite',
+              'bone-pulse': 'bonePulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'aurora': 'aurora 14s ease-in-out infinite alternate',
+              'breathe': 'breathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              // Skeleton: Gentle, slow flow
+              'skeleton-drift': 'skeletonDrift 20s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate',
+              'skeleton-breathe': 'skeletonBreathe 5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'skeleton-flow': 'skeletonFlow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              // Legacy (kept for compatibility)
+              'liquid-fill': 'liquidFill 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+              'caustic-wave': 'causticWave 3s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite',
+              'glass-breathe': 'glassBreathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'grain-drift': 'grainDrift 12s linear infinite',
+              // TranslationItem cinematic animations
+              'content-reveal': 'contentReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+              'materialize-flash': 'materializeFlash 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+              'glow-pulse': 'glowPulse 2s cubic-bezier(0.4, 0, 0.6, 1)',
+              'element-reveal': 'elementReveal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+              // Skeleton-to-content transition
+              'skeleton-exit': 'skeletonExit 0.3s cubic-bezier(0.4, 0, 1, 1) forwards',
+              'content-enter': 'contentEnter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+              // Arrival glow
+              'arrival-glow': 'arrivalGlow 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards',
             },
             keyframes: {
               fadeIn: {
@@ -28,7 +54,257 @@
               slideUp: {
                 '0%': { opacity: '0', transform: 'translateY(10px)' },
                 '100%': { opacity: '1', transform: 'translateY(0)' },
-              }
+              },
+              shimmer: {
+                '0%': { transform: 'translateX(-100%)' },
+                '100%': { transform: 'translateX(200%)' },
+              },
+              // LiquidSkeleton keyframes
+              drift: {
+                '0%': { 
+                  transform: 'translate(0%, 0%) rotate(0deg) scale(1)',
+                  opacity: '0.4'
+                },
+                '50%': {
+                  opacity: '0.6'
+                },
+                '100%': { 
+                  transform: 'translate(5%, 3%) rotate(1.5deg) scale(1.02)',
+                  opacity: '0.5'
+                },
+              },
+              shimmerFast: {
+                '0%': { 
+                  transform: 'translateX(-150%) skewX(-15deg)',
+                  opacity: '0'
+                },
+                '20%': {
+                  opacity: '1'
+                },
+                '80%': {
+                  opacity: '1'
+                },
+                '100%': { 
+                  transform: 'translateX(250%) skewX(-15deg)',
+                  opacity: '0'
+                },
+              },
+              bonePulse: {
+                '0%, 100%': { 
+                  opacity: '0.4',
+                  transform: 'scaleX(1)'
+                },
+                '50%': { 
+                  opacity: '0.7',
+                  transform: 'scaleX(1.002)'
+                },
+              },
+              aurora: {
+                '0%': {
+                  backgroundPosition: '0% 50%',
+                  filter: 'blur(60px)'
+                },
+                '50%': {
+                  backgroundPosition: '100% 50%',
+                  filter: 'blur(80px)'
+                },
+                '100%': {
+                  backgroundPosition: '0% 50%',
+                  filter: 'blur(60px)'
+                },
+              },
+              breathe: {
+                '0%, 100%': { 
+                  opacity: '0.02'
+                },
+                '50%': { 
+                  opacity: '0.04'
+                },
+              },
+              // Viscous Flow keyframes
+              liquidFill: {
+                '0%': {
+                  transform: 'translateX(-100%) scaleY(1)',
+                  opacity: '0'
+                },
+                '10%': {
+                  opacity: '1',
+                  transform: 'translateX(-80%) scaleY(1.015)'
+                },
+                '50%': {
+                  transform: 'translateX(0%) scaleY(1.025)',
+                  opacity: '1'
+                },
+                '90%': {
+                  transform: 'translateX(80%) scaleY(1.015)',
+                  opacity: '1'
+                },
+                '100%': {
+                  transform: 'translateX(100%) scaleY(1)',
+                  opacity: '0'
+                },
+              },
+              causticWave: {
+                '0%': {
+                  transform: 'translateX(-120%) rotate(-2deg)',
+                  opacity: '0'
+                },
+                '15%': {
+                  opacity: '0.8'
+                },
+                '50%': {
+                  transform: 'translateX(0%) rotate(0deg)',
+                  opacity: '1'
+                },
+                '85%': {
+                  opacity: '0.8'
+                },
+                '100%': {
+                  transform: 'translateX(120%) rotate(2deg)',
+                  opacity: '0'
+                },
+              },
+              glassBreathe: {
+                '0%, 100%': {
+                  opacity: '0.3',
+                  transform: 'scale(1)'
+                },
+                '50%': {
+                  opacity: '0.5',
+                  transform: 'scale(1.01)'
+                },
+              },
+              grainDrift: {
+                '0%': {
+                  transform: 'translate(0, 0)'
+                },
+                '100%': {
+                  transform: 'translate(-10%, -10%)'
+                },
+              },
+              // Calm skeleton keyframes
+              skeletonDrift: {
+                '0%': { 
+                  transform: 'translate(0%, 0%)',
+                  opacity: '0.3'
+                },
+                '100%': { 
+                  transform: 'translate(2%, 1%)',
+                  opacity: '0.4'
+                },
+              },
+              skeletonBreathe: {
+                '0%, 100%': { 
+                  opacity: '0.4'
+                },
+                '50%': { 
+                  opacity: '0.55'
+                },
+              },
+              skeletonFlow: {
+                '0%': {
+                  transform: 'translateX(-100%)',
+                  opacity: '0'
+                },
+                '20%': {
+                  opacity: '0.6'
+                },
+                '80%': {
+                  opacity: '0.6'
+                },
+                '100%': {
+                  transform: 'translateX(100%)',
+                  opacity: '0'
+                },
+              },
+              // Skeleton exit / Content enter
+              skeletonExit: {
+                '0%': { 
+                  opacity: '1',
+                  filter: 'blur(0)'
+                },
+                '100%': { 
+                  opacity: '0',
+                  filter: 'blur(2px)'
+                },
+              },
+              contentEnter: {
+                '0%': { 
+                  opacity: '0',
+                  transform: 'translateY(4px)',
+                  filter: 'blur(2px)'
+                },
+                '100%': { 
+                  opacity: '1',
+                  transform: 'translateY(0)',
+                  filter: 'blur(0)'
+                },
+              },
+              // Subtle arrival glow
+              arrivalGlow: {
+                '0%': {
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0)'
+                },
+                '30%': {
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)'
+                },
+                '100%': {
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0)'
+                },
+              },
+              // TranslationItem cinematic keyframes
+              contentReveal: {
+                '0%': { 
+                  opacity: '0',
+                  transform: 'translateY(8px)',
+                  filter: 'blur(4px)'
+                },
+                '100%': { 
+                  opacity: '1',
+                  transform: 'translateY(0)',
+                  filter: 'blur(0)'
+                },
+              },
+              materializeFlash: {
+                '0%': {
+                  opacity: '0',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0), 0 0 0 0 rgba(255,255,255,0)'
+                },
+                '15%': {
+                  opacity: '1',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15), 0 0 30px 0 rgba(255,255,255,0.1)'
+                },
+                '50%': {
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 15px 0 rgba(255,255,255,0.05)'
+                },
+                '100%': {
+                  opacity: '1',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0), 0 0 0 0 rgba(255,255,255,0)'
+                },
+              },
+              glowPulse: {
+                '0%': {
+                  boxShadow: '0 0 0 0 rgba(255,255,255,0)'
+                },
+                '30%': {
+                  boxShadow: '0 0 20px 0 rgba(255,255,255,0.08)'
+                },
+                '100%': {
+                  boxShadow: '0 0 0 0 rgba(255,255,255,0)'
+                },
+              },
+              elementReveal: {
+                '0%': { 
+                  opacity: '0',
+                  transform: 'translateY(4px)',
+                  filter: 'blur(2px)'
+                },
+                '100%': { 
+                  opacity: '1',
+                  transform: 'translateY(0)',
+                  filter: 'blur(0)'
+                },
+              },
             }
           }
         }
@@ -42,6 +318,8 @@
           radial-gradient(at 100% 100%, rgba(255,255,255,0.03) 0px, transparent 50%);
         background-attachment: fixed;
         color: #e5e5e5;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       
       /* Premium matte noise texture overlay */
@@ -54,10 +332,24 @@
         height: 100%;
         pointer-events: none;
         z-index: 9999;
-        opacity: 0.025;
+        opacity: 0.02;
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
         background-repeat: repeat;
         background-size: 256px 256px;
+      }
+      
+      /* Respect reduced motion preference */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+        
+        /* Allow skeleton to still show static state */
+        .skeleton-bone {
+          opacity: 0.4 !important;
+        }
       }
       
       /* Custom scrollbar for webkit */
@@ -68,11 +360,11 @@
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.08);
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.15);
       }
     </style>
 
