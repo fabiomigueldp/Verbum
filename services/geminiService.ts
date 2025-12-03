@@ -50,18 +50,18 @@ const resolveModel = (model?: string) => {
 };
 
 export const translateText = async (
-  text: string, 
+  text: string,
   refinementInstruction?: string,
   contextHistory?: ContextMessage[],
   config?: AiRuntimeConfig
 ): Promise<TranslationResponse> => {
   try {
     let systemInstruction = BASE_TRANSLATION_INSTRUCTION;
-    
+
     // Inject Context History if available
     if (contextHistory && contextHistory.length > 0) {
       const historyStr = contextHistory.map(msg => `${msg.role === 'user' ? 'User Original' : 'Previous Translation'}: "${msg.content}"`).join('\n');
-      
+
       systemInstruction += `\n\n[CONVERSATION CONTEXT]\nThe following is a transcript of the recent conversation history. Use this ONLY for context (resolving references like "it", "they", "that project", consistent terminology). Do NOT translate this history, only the CURRENT INPUT.\n\n${historyStr}`;
     }
 
@@ -97,7 +97,7 @@ export const translateText = async (
 
     const jsonText = response.text;
     if (!jsonText) throw new Error("No response from AI");
-    
+
     const parsed = JSON.parse(jsonText);
 
     // Extract usage metadata from response
@@ -106,7 +106,7 @@ export const translateText = async (
       candidatesTokens: response.usageMetadata.candidatesTokenCount ?? 0,
       totalTokens: response.usageMetadata.totalTokenCount ?? 0,
     } : undefined;
-    
+
     return {
       translation: parsed.translation,
       detectedSourceLanguage: (parsed.detectedSourceLanguage || 'unknown') as LanguageCode,
@@ -119,7 +119,7 @@ export const translateText = async (
 };
 
 export const refineText = async (
-  text: string, 
+  text: string,
   instruction: string,
   config?: AiRuntimeConfig
 ): Promise<RefinementResponse> => {
@@ -163,7 +163,7 @@ LANGUAGE GUARD:
 
     const jsonText = response.text;
     if (!jsonText) throw new Error("No response from AI");
-    
+
     const parsed = JSON.parse(jsonText);
 
     // Extract usage metadata from response
@@ -172,7 +172,7 @@ LANGUAGE GUARD:
       candidatesTokens: response.usageMetadata.candidatesTokenCount ?? 0,
       totalTokens: response.usageMetadata.totalTokenCount ?? 0,
     } : undefined;
-    
+
     return {
       refined: parsed.refined,
       changes: parsed.changes,
@@ -182,5 +182,24 @@ LANGUAGE GUARD:
   } catch (error) {
     console.error("Refinement error:", error);
     throw error;
+  }
+};
+
+export const validateApiKey = async (apiKey: string): Promise<boolean> => {
+  try {
+    const client = new GoogleGenAI({ apiKey });
+    // We try to get a model to verify the key. 
+    // This is a lightweight check.
+    await client.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: 'user', parts: [{ text: 'Test' }] }],
+      config: {
+        responseMimeType: "text/plain",
+      }
+    });
+    return true;
+  } catch (error) {
+    console.warn("API Key Validation Failed:", error);
+    return false;
   }
 };

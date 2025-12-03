@@ -4,12 +4,13 @@ import { GlassCard } from './GlassCard';
 
 interface ApiKeyGateProps {
   onSuccess: (apiKey: string) => void;
+  isEnvKeyInvalid?: boolean;
 }
 
 // Gemini API Key regex pattern
-const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
+export const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
 
-export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
+export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInvalid }) => {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isValid, setIsValid] = useState(false);
@@ -32,12 +33,12 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
 
   const handleInitialize = () => {
     if (!isValid || isUnlocking) return;
-    
+
     setIsUnlocking(true);
-    
+
     // Save to localStorage
     localStorage.setItem('verbum_api_key', apiKey);
-    
+
     // Trigger unlock animation, then callback
     setTimeout(() => {
       onSuccess(apiKey);
@@ -51,7 +52,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div 
+    <div
       className={`
         fixed inset-0 z-50 flex items-center justify-center p-4
         bg-black/80 backdrop-blur-xl
@@ -60,7 +61,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
       `}
     >
       {/* Ambient glow effect */}
-      <div 
+      <div
         className={`
           absolute inset-0 pointer-events-none
           transition-opacity duration-1000
@@ -70,7 +71,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/[0.02] rounded-full blur-3xl" />
       </div>
 
-      <GlassCard 
+      <GlassCard
         className={`
           w-full max-w-md p-8 
           animate-slide-up
@@ -82,7 +83,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
         {/* Header Section */}
         <div className="flex flex-col items-center text-center mb-10">
           {/* Animated Key Icon */}
-          <div 
+          <div
             className={`
               relative p-4 mb-6 rounded-2xl
               bg-neutral-900/60 border border-white/5
@@ -90,8 +91,8 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
               ${isValid ? 'border-white/20 shadow-[0_0_30px_rgba(255,255,255,0.08)]' : ''}
             `}
           >
-            <KeyRound 
-              size={28} 
+            <KeyRound
+              size={28}
               className={`
                 text-neutral-400 transition-colors duration-500
                 ${isValid ? 'text-white' : ''}
@@ -99,7 +100,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
               `}
             />
             {/* Valid state indicator ring */}
-            <div 
+            <div
               className={`
                 absolute inset-0 rounded-2xl border border-white/30
                 transition-all duration-500
@@ -107,29 +108,12 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
               `}
             />
           </div>
-
-          {/* Title & Subtitle */}
-          <div className="space-y-3">
-            <h1 className="text-[10px] tracking-[0.25em] uppercase text-neutral-400 font-medium">
-              VERBUM // NEURAL ENGINE
-            </h1>
-            <div 
-              className={`
-                text-[9px] tracking-[0.2em] uppercase font-bold px-3 py-1.5 rounded-full
-                transition-all duration-500
-                ${isValid 
-                  ? 'bg-white/10 text-white border border-white/20' 
-                  : 'bg-neutral-900/80 text-neutral-500 border border-white/5'
-                }
-              `}
-            >
-              {isValid ? 'CREDENTIALS_VALID' : 'MISSING_CREDENTIALS'}
-            </div>
-          </div>
-
           {/* Description */}
           <p className="mt-6 text-[11px] text-neutral-600 leading-relaxed max-w-xs">
-            A Gemini API credential is required to initialize the neural refinement context.
+            {isEnvKeyInvalid
+              ? "The system environment variable contains an invalid API key. Please enter a new key manually."
+              : "A Gemini API credential is required to initialize the neural refinement context."
+            }
           </p>
         </div>
 
@@ -138,34 +122,34 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
           <label className="block text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-3 ml-1">
             API_CREDENTIAL
           </label>
-          <div 
+          <div
             className={`
               relative group
               transition-all duration-500
             `}
           >
             {/* Outer glow container */}
-            <div 
+            <div
               className={`
                 absolute -inset-[1px] rounded-xl
                 transition-all duration-500
-                ${isValid 
-                  ? 'bg-gradient-to-r from-white/20 via-white/10 to-white/20 opacity-100' 
-                  : isFocused 
-                    ? 'bg-white/10 opacity-100' 
+                ${isValid
+                  ? 'bg-gradient-to-r from-white/20 via-white/10 to-white/20 opacity-100'
+                  : isFocused
+                    ? 'bg-white/10 opacity-100'
                     : 'bg-transparent opacity-0'
                 }
               `}
             />
-            
+
             {/* Input container */}
-            <div 
+            <div
               className={`
                 relative flex items-center
                 bg-black/60 rounded-xl
                 border transition-all duration-500
-                ${isValid 
-                  ? 'border-white/30 shadow-[inset_0_0_20px_rgba(255,255,255,0.03)]' 
+                ${isValid
+                  ? 'border-white/30 shadow-[inset_0_0_20px_rgba(255,255,255,0.03)]'
                   : isFocused
                     ? 'border-white/15'
                     : 'border-white/5 hover:border-white/10'
@@ -193,7 +177,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
                 `}
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               />
-              
+
               {/* Toggle visibility button */}
               <button
                 type="button"
@@ -270,7 +254,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess }) => {
             <div className="w-1.5 h-1.5 rounded-full bg-neutral-800" />
           </div>
         </div>
-      </GlassCard>
-    </div>
+      </GlassCard >
+    </div >
   );
 };

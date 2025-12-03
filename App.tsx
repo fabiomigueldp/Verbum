@@ -6,8 +6,8 @@ import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { DiffViewer } from './components/DiffViewer';
-import { ApiKeyGate } from './components/ApiKeyGate';
-import { translateText, refineText } from './services/geminiService';
+import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
+import { translateText, refineText, validateApiKey } from './services/geminiService';
 import { TranslationRecord, ToneOption, CustomTone, ContextMessage, UsageSession, UsageMetadata } from './types';
 
 // Add type for webkitSpeechRecognition
@@ -56,6 +56,7 @@ const App: React.FC = () => {
 
   // Authorization State - Gate control
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // null = checking, false = show gate, true = authorized
+  const [isEnvKeyInvalid, setIsEnvKeyInvalid] = useState(false);
 
   // Refinement & Context States
   const [tone, setTone] = useState<ToneOption>('standard');
@@ -74,43 +75,59 @@ const App: React.FC = () => {
 
   // Browser Capability State
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
-  
+
   // Estimated length for adaptive skeleton
   const [estimatedLength, setEstimatedLength] = useState<number>(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
-  const baseTextRef = useRef<string>('');
-  const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Skeleton delay threshold (ms) - don't show skeleton for fast responses
   const SKELETON_DELAY = 180;
+  const baseTextRef = useRef<string>('');
+  const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Check capabilities on mount
-  useEffect(() => {
-    setIsSpeechSupported('webkitSpeechRecognition' in window);
-  }, []);
-
-  // Check authorization on mount
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem('verbum_api_key');
-    const envApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    
-    // Check if we have any valid API key source
-    if (savedApiKey?.trim() || envApiKey?.trim()) {
-      setIsAuthorized(true);
-    } else {
-      setIsAuthorized(false);
-    }
-  }, []);
-
-  // Handler for when gate is passed successfully
   const handleGateSuccess = (key: string) => {
     setApiKey(key);
     setIsAuthorized(true);
+    setIsEnvKeyInvalid(false); // Clear error if user manually enters valid key
   };
+  // Check authorization on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const savedApiKey = localStorage.getItem('verbum_api_key');
+      const envApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
+      // 1. Check Local Storage first (User override)
+      if (savedApiKey && API_KEY_REGEX.test(savedApiKey)) {
+        const isValid = await validateApiKey(savedApiKey);
+        if (isValid) {
+          setApiKey(savedApiKey);
+          setIsAuthorized(true);
+          return;
+        } else {
+          // Stored key is invalid, clear it
+          localStorage.removeItem('verbum_api_key');
+        }
+      }
+
+      // 2. Check Environment Variable
+      if (envApiKey && API_KEY_REGEX.test(envApiKey)) {
+        const isValid = await validateApiKey(envApiKey);
+        if (isValid) {
+          setIsAuthorized(true);
+        } else {
+          setIsEnvKeyInvalid(true);
+          setIsAuthorized(false);
+        }
+      } else {
+        setIsAuthorized(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
   // Load persistence
   useEffect(() => {
     const savedHistory = localStorage.getItem('verbum_history');
@@ -183,9 +200,9 @@ const App: React.FC = () => {
 
   const updateSessionStats = (usageMetadata: UsageMetadata | undefined) => {
     if (!usageMetadata) return;
-    
+
     const cost = calculateCost(model, usageMetadata.promptTokens, usageMetadata.candidatesTokens);
-    
+
     setSessionStats(prev => ({
       totalInput: prev.totalInput + usageMetadata.promptTokens,
       totalOutput: prev.totalOutput + usageMetadata.candidatesTokens,
@@ -209,12 +226,12 @@ const App: React.FC = () => {
 
     // Store estimated length for adaptive skeleton before clearing input
     setEstimatedLength(input.trim().length);
-    
+
     setLoading(true);
     // Reset refinement states on new translation
     setOriginalInput(null);
     setShowDiff(false);
-    
+
     // Delayed skeleton display - avoid flicker for fast responses
     skeletonTimerRef.current = setTimeout(() => {
       setShowSkeleton(true);
@@ -444,7 +461,10 @@ const App: React.FC = () => {
 
       {/* Ignition Gate - API Key Authorization */}
       {isAuthorized === false && (
-        <ApiKeyGate onSuccess={handleGateSuccess} />
+        <ApiKeyGate
+          onSuccess={handleGateSuccess}
+          isEnvKeyInvalid={isEnvKeyInvalid}
+        />
       )}
 
       {/* Settings Modal */}
@@ -461,6 +481,7 @@ const App: React.FC = () => {
           model={model}
           apiKey={apiKey}
           resolvedApiKey={resolvedApiKey}
+          isEnvKey={Boolean(!apiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY))}
           onModelChange={setModel}
           onApiKeyChange={setApiKey}
           sessionStats={sessionStats}
@@ -526,7 +547,7 @@ const App: React.FC = () => {
                   <button
                     onClick={() => setShowSettings(true)}
                     className="flex items-center gap-2 px-3 py-2 rounded-full border border-white/10 bg-white/5 text-[10px] tracking-[0.15em] uppercase text-neutral-400 hover:text-white hover:border-white/30 transition-colors"
-                    title="Adicione uma API Key do Gemini (aistudio.google.com/api-keys)"
+                    title="Add a Gemini API Key (aistudio.google.com/api-keys)"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
                     <span>API Key</span>
@@ -700,9 +721,9 @@ const App: React.FC = () => {
               </div>
             )}
             {history.map((item) => (
-              <TranslationItem 
-                key={item.id} 
-                item={item} 
+              <TranslationItem
+                key={item.id}
+                item={item}
                 onDelete={deleteItem}
                 isNew={item.id === newItemId}
               />

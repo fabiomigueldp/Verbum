@@ -17,6 +17,7 @@ interface RefineModalProps {
   model: string;
   apiKey: string;
   resolvedApiKey: string;
+  isEnvKey?: boolean;
   onModelChange: (model: string) => void;
   onApiKeyChange: (key: string) => void;
   sessionStats: UsageSession;
@@ -52,6 +53,7 @@ export const RefineModal: React.FC<RefineModalProps> = ({
   model,
   apiKey,
   resolvedApiKey,
+  isEnvKey,
   onModelChange,
   onApiKeyChange,
   sessionStats,
@@ -180,7 +182,9 @@ export const RefineModal: React.FC<RefineModalProps> = ({
                         </div>
                         <div>
                           <span className="text-sm font-medium text-white block">API Key</span>
-                          <span className="text-xs text-neutral-500 font-light">Stored locally on this device</span>
+                          <span className="text-xs text-neutral-500 font-light">
+                            {isEnvKey ? 'Loaded from Environment Variables' : 'Stored locally on this device'}
+                          </span>
                         </div>
                       </div>
                       <span className={`text-[10px] uppercase tracking-[0.2em] font-bold ${hasResolvedApiKey ? 'text-neutral-200' : 'text-neutral-500'}`}>

@@ -24,6 +24,7 @@ __pycache__/
 scanner.py
 
 # Editor directories and files
+.agent/*
 .vscode/*
 !.vscode/extensions.json
 .idea
