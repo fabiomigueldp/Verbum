@@ -1,0 +1,7 @@
+{
+  "name": "Verbum",
+  "description": "A premium, minimalist executive translator for Portuguese and English. Features a liquid glass monochrome interface and smart, context-aware localization without retention of history in the AI context.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
