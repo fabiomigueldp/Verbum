@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
+  const [isSkeletonExiting, setIsSkeletonExiting] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [history, setHistory] = useState<TranslationRecord[]>([]);
@@ -231,6 +232,7 @@ const App: React.FC = () => {
     // Reset refinement states on new translation
     setOriginalInput(null);
     setShowDiff(false);
+    setIsSkeletonExiting(false);
 
     // Delayed skeleton display - avoid flicker for fast responses
     skeletonTimerRef.current = setTimeout(() => {
@@ -285,12 +287,25 @@ const App: React.FC = () => {
       setTimeout(() => setNewItemId(null), 800);
 
       setHistory(prev => [newRecord, ...prev]);
+
+      if (showSkeleton) {
+        setIsSkeletonExiting(true);
+        setTimeout(() => {
+          setShowSkeleton(false);
+          setIsSkeletonExiting(false);
+        }, 400);
+      } else {
+        setShowSkeleton(false);
+      }
+
       setInput('');
       if (scrollRef.current) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (error) {
       console.error("Translation failed", error);
+      setShowSkeleton(false);
+      setIsSkeletonExiting(false);
     } finally {
       // Clear skeleton timer on completion
       if (skeletonTimerRef.current) {
@@ -298,7 +313,6 @@ const App: React.FC = () => {
         skeletonTimerRef.current = null;
       }
       setLoading(false);
-      setShowSkeleton(false);
     }
   };
 
@@ -453,8 +467,8 @@ const App: React.FC = () => {
     }
   };
 
-  const showLiquidSkeleton = showSkeleton && loading;
   const hasHistory = history.length > 0;
+  const shouldRenderSkeleton = showSkeleton || isSkeletonExiting;
 
   return (
     <div className="min-h-screen flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
@@ -713,11 +727,14 @@ const App: React.FC = () => {
 
       {/* History List */}
       <div className="w-full relative z-10 pb-20" ref={scrollRef}>
-        {(hasHistory || showLiquidSkeleton) ? (
-          <div className="space-y-6">
-            {showLiquidSkeleton && (
+        {(hasHistory || shouldRenderSkeleton) ? (
+          <div className="space-y-6 relative">
+            {shouldRenderSkeleton && (
               <div className="animate-fade-in">
-                <LiquidSkeleton estimatedLength={estimatedLength} />
+                <LiquidSkeleton 
+                  estimatedLength={estimatedLength}
+                  isExiting={isSkeletonExiting}
+                />
               </div>
             )}
             {history.map((item) => (

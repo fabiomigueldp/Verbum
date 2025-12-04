@@ -39,6 +39,8 @@ interface LiquidSkeletonProps {
   estimatedLength?: number;
   /** Custom class name */
   className?: string;
+  /** Trigger exit animation (absolute overlay + fade out) */
+  isExiting?: boolean;
 }
 
 // ============================================================================
@@ -207,12 +209,17 @@ const getLineConfig = (estimatedLength?: number) => {
 export const LiquidSkeleton: React.FC<LiquidSkeletonProps> = ({
   estimatedLength,
   className = '',
+  isExiting = false,
 }) => {
   const lines = useMemo(() => getLineConfig(estimatedLength), [estimatedLength]);
   
   return (
     <div
-      className={`group mb-4 ${className}`}
+      className={`
+        group mb-4
+        ${className}
+        ${isExiting ? 'absolute top-0 left-0 w-full z-20 animate-skeleton-exit pointer-events-none' : 'relative'}
+      `}
       aria-hidden="true"
       aria-label="Loading translation"
       role="status"

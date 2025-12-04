@@ -99,7 +99,6 @@ const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, delay = 0 }) =>
         bg-white/[0.02]
         border border-white/[0.08]
         rounded-md
-        animate-element-reveal
         select-none
       "
       style={{
@@ -134,7 +133,6 @@ const Timestamp: React.FC<TimestampProps> = ({ timestamp, delay = 0 }) => {
       className="
         text-[10px] text-neutral-600 
         font-medium tracking-wider
-        animate-element-reveal
         select-none
       "
       style={{
@@ -161,16 +159,12 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
   const [copied, setCopied] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [hasArrived, setHasArrived] = useState(!isNew);
   const itemRef = useRef<HTMLDivElement>(null);
-
-  // Brief arrival emphasis for new items - very subtle
-  useEffect(() => {
-    if (isNew && !hasArrived) {
-      const timer = setTimeout(() => setHasArrived(true), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [isNew, hasArrived]);
+  
+  // Capture initial isNew value to prevent re-render flickering
+  // This ensures animation classes are stable throughout the component lifecycle
+  const wasNewOnMount = useRef(isNew);
+  const shouldAnimate = wasNewOnMount.current;
 
   const handleCopy = async () => {
     try {
@@ -218,8 +212,7 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
       ref={itemRef}
       className={`
         group mb-4 
-        ${isNew ? 'animate-content-enter' : ''}
-        ${isNew && !hasArrived ? 'animate-arrival-glow' : ''}
+        ${shouldAnimate ? 'animate-content-enter' : ''}
       `}
     >
       <GlassCard className="relative overflow-hidden" hoverEffect={true}>
@@ -301,10 +294,8 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
                 text-lg font-light leading-relaxed
                 text-neutral-200
                 selection:bg-white/20 selection:text-white
-                animate-element-reveal
               "
               style={{
-                animationDelay: '100ms',
                 WebkitFontSmoothing: 'antialiased',
                 MozOsxFontSmoothing: 'grayscale',
                 textRendering: 'optimizeLegibility',
