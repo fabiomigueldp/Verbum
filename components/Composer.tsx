@@ -192,12 +192,12 @@ const DiffControls = memo<{
       {showDiff ? (
         <>
           <GitCompareArrows size={13} className="opacity-80" />
-          <span className="text-[10px] uppercase tracking-[0.15em] font-medium">Diff</span>
+          <span className="text-[10px] uppercase tracking-[0.15em] font-medium hidden sm:inline">Diff</span>
         </>
       ) : (
         <>
           <Eye size={13} className="opacity-80" />
-          <span className="text-[10px] uppercase tracking-[0.15em] font-medium">Preview</span>
+          <span className="text-[10px] uppercase tracking-[0.15em] font-medium hidden sm:inline">Preview</span>
         </>
       )}
     </ToolbarButton>
@@ -224,7 +224,7 @@ const DiffControls = memo<{
       className="flex items-center gap-1.5 py-1.5 px-3 rounded-full"
     >
       <Check size={13} strokeWidth={2.5} />
-      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold">Apply</span>
+      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold hidden sm:inline">Apply</span>
     </ToolbarButton>
   </div>
 ));
@@ -350,7 +350,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
         />
         
         {/* Content Container */}
-        <div className="relative z-10 flex flex-col h-[420px] p-8">
+        <div className="relative z-10 flex flex-col h-[420px] p-4 sm:p-8">
           
           {/* ================================================================
               MAIN INPUT AREA - Zero Layout Shift
@@ -401,27 +401,29 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                   resize-none 
                   py-6
                   
-                  /* Focus - No browser ring */
+                  /* Kill all borders/outlines - Visual Artifact Fix */
+                  border-none
+                  outline-none
+                  shadow-none
                   focus:outline-none 
                   focus:ring-0
+                  focus:border-none
                   
-                  /* Scrollbar - Ultra minimal */
+                  /* Scrollbar - Ultra minimal, transparent track */
                   [scrollbar-width:thin]
                   [scrollbar-color:rgba(255,255,255,0.06)_transparent]
                   
-                  /* Webkit scrollbar */
+                  /* Webkit scrollbar - Explicit transparent track */
                   [&::-webkit-scrollbar]:w-[3px]
-                  [&::-webkit-scrollbar]:opacity-0
-                  [&::-webkit-scrollbar]:transition-opacity
-                  [&::-webkit-scrollbar]:duration-300
+                  [&::-webkit-scrollbar]:bg-transparent
                   [&::-webkit-scrollbar-track]:bg-transparent
+                  [&::-webkit-scrollbar-track]:border-none
                   [&::-webkit-scrollbar-thumb]:bg-white/[0.06]
                   [&::-webkit-scrollbar-thumb]:rounded-full
-                  [&:hover::-webkit-scrollbar]:opacity-100
                   [&:hover::-webkit-scrollbar-thumb]:bg-white/[0.1]
                   
-                  /* Mask - Edge fade */
-                  [mask-image:linear-gradient(to_bottom,transparent_0px,black_24px,black_calc(100%-24px),transparent_100%)]
+                  /* Mask - Edge fade (inset slightly to avoid 1px edge artifacts) */
+                  [mask-image:linear-gradient(to_bottom,transparent_0px,black_20px,black_calc(100%-20px),transparent_100%)]
                   
                   /* Numeric alignment */
                   [font-variant-numeric:tabular-nums]
@@ -450,12 +452,12 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
             "
           >
             {/* Left Side: Refinement Tools */}
-            <div className="flex items-center gap-2">
-              {/* Language Indicator - Clickable to open settings */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Language Indicator - Hidden on mobile when diff is active */}
               <button
                 onClick={onShowSettings}
                 title="Configure Languages"
-                className="
+                className={`
                   flex items-center gap-1
                   px-2 py-1.5 rounded-md
                   text-[10px] font-medium tracking-[0.1em]
@@ -464,7 +466,8 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                   hover:bg-white/[0.03]
                   transition-all duration-300
                   focus:outline-none
-                "
+                  ${showDiffControls ? 'hidden sm:flex' : 'flex'}
+                `}
               >
                 <span className="text-neutral-500">{anchorLanguage.toUpperCase()}</span>
                 <span className="text-neutral-700">/</span>

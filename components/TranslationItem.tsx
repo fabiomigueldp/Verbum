@@ -76,7 +76,6 @@ interface ActionButtonProps {
   isActive?: boolean;
   variant?: 'default' | 'danger';
   children: React.ReactNode;
-  delay?: number;
 }
 
 const ActionButton: React.FC<ActionButtonProps> = ({
@@ -85,32 +84,29 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   isActive = false,
   variant = 'default',
   children,
-  delay = 0,
 }) => {
+  // Base: start with transparent background, transition smoothly
   const baseClasses = `
     relative p-2 rounded-full
-    transition-all duration-300 ease-out
-    backdrop-blur-sm
+    transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)]
     border border-transparent
-    group/btn
+    bg-transparent
   `;
   
+  // Variant classes - all hover states start from transparent bg
   const variantClasses = variant === 'danger'
     ? `text-neutral-600 
        hover:text-neutral-300 
-       hover:bg-white/[0.03] 
-       hover:border-white/[0.06]
-       hover:shadow-[0_0_12px_0_rgba(255,255,255,0.03)]`
+       hover:bg-white/[0.04] 
+       hover:border-white/[0.06]`
     : isActive
       ? `text-white 
          bg-white/[0.08] 
-         border-white/[0.1]
-         shadow-[0_0_16px_0_rgba(255,255,255,0.06)]`
+         border-white/[0.1]`
       : `text-neutral-500 
          hover:text-white 
-         hover:bg-white/[0.04]
-         hover:border-white/[0.08]
-         hover:shadow-[0_0_12px_0_rgba(255,255,255,0.03)]`;
+         hover:bg-white/[0.06]
+         hover:border-white/[0.08]`;
 
   return (
     <button
@@ -118,12 +114,9 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       className={`${baseClasses} ${variantClasses}`}
       title={title}
       style={{
-        animationDelay: `${delay}ms`,
         WebkitFontSmoothing: 'antialiased',
       }}
     >
-      {/* Subtle inner glow on hover */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
       <span className="relative z-10">{children}</span>
     </button>
   );
@@ -307,20 +300,18 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
               <Timestamp timestamp={item.timestamp} delay={50} />
             </div>
             
-            {/* Right: Action buttons - reveal on hover */}
+            {/* Right: Action buttons - unified reveal on hover (no stagger) */}
             <div 
               className="
                 flex gap-1 
                 opacity-0 group-hover:opacity-100 
-                transition-all duration-500 ease-out
-                transform translate-x-2 group-hover:translate-x-0
+                transition-opacity duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)]
               "
             >
               <ActionButton
                 onClick={() => handleSpeak(item.translation, item.targetLang)}
                 title="Listen"
                 isActive={isPlaying}
-                delay={100}
               >
                 {isPlaying ? <StopCircle size={14} /> : <Volume2 size={14} />}
               </ActionButton>
@@ -329,7 +320,6 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
                 onClick={() => setShowOriginal(!showOriginal)}
                 title={showOriginal ? "Hide Original" : "Show Original"}
                 isActive={showOriginal}
-                delay={150}
               >
                 {showOriginal ? <EyeOff size={14} /> : <Eye size={14} />}
               </ActionButton>
@@ -338,7 +328,6 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
                 onClick={handleCopy}
                 title="Copy"
                 isActive={copied}
-                delay={200}
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </ActionButton>
@@ -347,7 +336,6 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
                 onClick={() => onDelete(item.id)}
                 title="Delete"
                 variant="danger"
-                delay={250}
               >
                 <Trash2 size={14} />
               </ActionButton>
