@@ -212,7 +212,7 @@ export const RefineModal: React.FC<RefineModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Target Language */
+                  {/* Target Language */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-500 font-bold">
