@@ -45,6 +45,9 @@
               'content-enter': 'contentEnter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
               // Arrival glow
               'arrival-glow': 'arrivalGlow 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+              // Composer Premium Animations
+              'breathe-glow': 'breatheGlow 4s ease-in-out infinite',
+              'fade-slide-in': 'fadeSlideIn 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
             },
             keyframes: {
               fadeIn: {
@@ -249,6 +252,29 @@
                 '100%': {
                   boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0)'
                 },
+              },
+              // Composer Premium Keyframes
+              breatheGlow: {
+                '0%, 100%': {
+                  opacity: '0.5',
+                },
+                '50%': {
+                  opacity: '1',
+                },
+              },
+              fadeSlideIn: {
+                '0%': {
+                  opacity: '0',
+                  transform: 'translateX(-8px)',
+                },
+                '100%': {
+                  opacity: '1',
+                  transform: 'translateX(0)',
+                },
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(16px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
               },
               // TranslationItem cinematic keyframes
               contentReveal: {

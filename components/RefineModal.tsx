@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe } from 'lucide-react';
 import { GlassCard } from './GlassCard';
-import { ToneOption, CustomTone, UsageSession } from '../types';
+import { ToneOption, CustomTone, UsageSession, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
 import { CustomToneModal } from './CustomToneModal';
 import { TokenTelemetry } from './TokenTelemetry';
 
@@ -22,6 +22,11 @@ interface RefineModalProps {
   onApiKeyChange: (key: string) => void;
   sessionStats: UsageSession;
   onResetSessionStats: () => void;
+  // Language Matrix
+  anchorLanguage: Exclude<LanguageCode, 'unknown'>;
+  targetLanguage: Exclude<LanguageCode, 'unknown'>;
+  onAnchorLanguageChange: (lang: Exclude<LanguageCode, 'unknown'>) => void;
+  onTargetLanguageChange: (lang: Exclude<LanguageCode, 'unknown'>) => void;
   onSelect: (tone: ToneOption) => void;
   onAddCustomTone: (tone: CustomTone) => void;
   onDeleteCustomTone: (id: string) => void;
@@ -76,6 +81,10 @@ export const RefineModal: React.FC<RefineModalProps> = ({
   onApiKeyChange,
   sessionStats,
   onResetSessionStats,
+  anchorLanguage,
+  targetLanguage,
+  onAnchorLanguageChange,
+  onTargetLanguageChange,
   onSelect,
   onAddCustomTone,
   onDeleteCustomTone,
@@ -84,6 +93,7 @@ export const RefineModal: React.FC<RefineModalProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showModels, setShowModels] = useState(false);
+  const [showLanguages, setShowLanguages] = useState(false);
 
   // Local state for slider to prevent parent re-renders on every drag event
   const [localDepth, setLocalDepth] = useState(contextDepth);
@@ -132,6 +142,126 @@ export const RefineModal: React.FC<RefineModalProps> = ({
           </div>
 
           <div className="overflow-y-auto pr-2 -mr-2 space-y-6 custom-scrollbar flex-1 min-h-0">
+
+            {/* Language Matrix - Smart Pivot Configuration */}
+            <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowLanguages(!showLanguages)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-neutral-900 text-white border border-white/10">
+                    <Globe size={16} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-white block">Language Matrix</span>
+                    <span className="text-xs text-neutral-500 font-light">
+                      {anchorLanguage.toUpperCase()} / {targetLanguage.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-neutral-500">
+                  <span className="text-[10px] uppercase tracking-[0.2em]">Configure</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform ${showLanguages ? 'rotate-180 text-white' : ''}`}
+                  />
+                </div>
+              </button>
+
+              {showLanguages && (
+                <div className="px-4 pt-4 pb-4 space-y-5 animate-fade-in border-t border-white/5">
+                  {/* Anchor Language */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-500 font-bold">
+                        Anchor (Native)
+                      </span>
+                      <span className="text-[10px] text-neutral-600 font-light">Your primary language</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <button
+                          key={`anchor-${lang.code}`}
+                          onClick={() => {
+                            if (lang.code !== targetLanguage) {
+                              onAnchorLanguageChange(lang.code);
+                            }
+                          }}
+                          disabled={lang.code === targetLanguage}
+                          title={lang.name}
+                          className={`
+                            px-2 py-1.5 rounded-lg text-center transition-all duration-300 relative group/lang
+                            ${anchorLanguage === lang.code
+                              ? 'bg-white/10 border border-white/20 text-white'
+                              : lang.code === targetLanguage
+                                ? 'bg-transparent border border-white/5 text-neutral-700 cursor-not-allowed'
+                                : 'bg-transparent border border-white/5 text-neutral-400 hover:border-white/15 hover:text-white'
+                            }
+                            ${lang.dir === 'rtl' ? 'font-medium' : ''}
+                          `}
+                        >
+                          <span className="text-[10px] font-medium tracking-wide">{lang.code.toUpperCase()}</span>
+                          {/* RTL indicator */}
+                          {lang.dir === 'rtl' && (
+                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/30" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Target Language */
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-500 font-bold">
+                        Target (Foreign)
+                      </span>
+                      <span className="text-[10px] text-neutral-600 font-light">Translation destination</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <button
+                          key={`target-${lang.code}`}
+                          onClick={() => {
+                            if (lang.code !== anchorLanguage) {
+                              onTargetLanguageChange(lang.code);
+                            }
+                          }}
+                          disabled={lang.code === anchorLanguage}
+                          title={lang.name}
+                          className={`
+                            px-2 py-1.5 rounded-lg text-center transition-all duration-300 relative group/lang
+                            ${targetLanguage === lang.code
+                              ? 'bg-white/10 border border-white/20 text-white'
+                              : lang.code === anchorLanguage
+                                ? 'bg-transparent border border-white/5 text-neutral-700 cursor-not-allowed'
+                                : 'bg-transparent border border-white/5 text-neutral-400 hover:border-white/15 hover:text-white'
+                            }
+                            ${lang.dir === 'rtl' ? 'font-medium' : ''}
+                          `}
+                        >
+                          <span className="text-[10px] font-medium tracking-wide">{lang.code.toUpperCase()}</span>
+                          {/* RTL indicator */}
+                          {lang.dir === 'rtl' && (
+                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/30" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Smart Pivot Explanation */}
+                  <div className="pt-3 border-t border-white/5">
+                    <p className="text-[10px] text-neutral-600 font-light leading-relaxed">
+                      Smart Pivot: Text in {anchorLanguage.toUpperCase()} translates to {targetLanguage.toUpperCase()}, 
+                      and vice versa. Any other language translates to {anchorLanguage.toUpperCase()}.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Model & Access */}
             <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">

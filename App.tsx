@@ -1,14 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Eraser, Command, Mic, Sparkles, Sliders, Eye, RotateCcw, GitCompareArrows, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Eraser, Command } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { GlassCard } from './components/GlassCard';
 import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
-import { DiffViewer } from './components/DiffViewer';
 import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
+import { Composer, ComposerRef } from './components/Composer';
 import { translateText, refineText, validateApiKey } from './services/geminiService';
-import { TranslationRecord, ToneOption, CustomTone, ContextMessage, UsageSession, UsageMetadata } from './types';
+import { 
+  TranslationRecord, 
+  ToneOption, 
+  CustomTone, 
+  ContextMessage, 
+  UsageSession, 
+  UsageMetadata,
+  LanguageConfig,
+  LanguageCode
+} from './types';
 
 // Add type for webkitSpeechRecognition
 declare global {
@@ -70,6 +78,10 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
 
+  // Language Configuration - Smart Pivot System
+  const [anchorLanguage, setAnchorLanguage] = useState<Exclude<LanguageCode, 'unknown'>>('pt');
+  const [targetLanguage, setTargetLanguage] = useState<Exclude<LanguageCode, 'unknown'>>('en');
+
   // "See Original/Diff" State Logic
   const [originalInput, setOriginalInput] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
@@ -81,7 +93,7 @@ const App: React.FC = () => {
   const [estimatedLength, setEstimatedLength] = useState<number>(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<ComposerRef>(null);
   const recognitionRef = useRef<any>(null);
 
   // Skeleton delay threshold (ms) - don't show skeleton for fast responses
@@ -167,6 +179,15 @@ const App: React.FC = () => {
     if (savedSessionStats) {
       try { setSessionStats(JSON.parse(savedSessionStats)); } catch (e) { console.error("Session stats parse error", e); }
     }
+    // Language settings
+    const savedAnchorLang = localStorage.getItem('verbum_anchor_language');
+    if (savedAnchorLang) {
+      setAnchorLanguage(savedAnchorLang as Exclude<LanguageCode, 'unknown'>);
+    }
+    const savedTargetLang = localStorage.getItem('verbum_target_language');
+    if (savedTargetLang) {
+      setTargetLanguage(savedTargetLang as Exclude<LanguageCode, 'unknown'>);
+    }
   }, []);
 
   // Save persistence - DEBOUNCED for heavy items
@@ -184,6 +205,14 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('verbum_model', model); }, [model]);
   useEffect(() => { localStorage.setItem('verbum_api_key', apiKey); }, [apiKey]);
   useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
+  useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
+  useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
+
+  // Language config for API calls
+  const languageConfig: LanguageConfig = {
+    anchor: anchorLanguage,
+    target: targetLanguage,
+  };
 
   const getRefinementInstruction = () => {
     let instruction = STANDARD_TONES_MAP[tone as string];
@@ -264,7 +293,7 @@ const App: React.FC = () => {
         });
       }
 
-      const result = await translateText(input, instruction, contextPayload, { model, apiKey: effectiveApiKey });
+      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey });
 
       // Update session stats with usage metadata
       updateSessionStats(result.usageMetadata);
@@ -275,8 +304,8 @@ const App: React.FC = () => {
         original: input.trim(),
         translation: result.translation,
         timestamp: Date.now(),
-        sourceLang: result.detectedSourceLanguage as 'pt' | 'en' | 'unknown',
-        targetLang: result.detectedSourceLanguage === 'pt' ? 'en' : 'pt',
+        sourceLang: result.detectedSourceLanguage,
+        targetLang: result.targetLanguageUsed,
       };
 
       // Clear skeleton timer if response came before delay
@@ -371,24 +400,15 @@ const App: React.FC = () => {
     setOriginalInput(null);
     setShowDiff(false);
     // Focus textarea for continued editing
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    composerRef.current?.focus();
   };
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+  const handleTextChange = useCallback((newValue: string) => {
+    setInput(newValue);
     // If user starts editing, we assume they accept the changes so far,
     // Clear diff state if they edit manually to avoid sync issues.
     if (showDiff) setShowDiff(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleTranslate();
-    }
-  };
+  }, [showDiff]);
 
   const clearHistory = () => {
     if (confirm("Clear all translation history?")) {
@@ -410,7 +430,7 @@ const App: React.FC = () => {
     if (tone === id) setTone('standard');
   };
 
-  const toggleListening = () => {
+  const toggleListening = useCallback(() => {
     // Clear diff if active before starting
     if (showDiff) setShowDiff(false);
 
@@ -458,9 +478,7 @@ const App: React.FC = () => {
 
       recognition.onend = () => {
         setIsListening(false);
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-        }
+        composerRef.current?.focus();
       };
 
       recognition.start();
@@ -468,7 +486,7 @@ const App: React.FC = () => {
       console.error("Failed to start speech recognition:", error);
       setIsListening(false);
     }
-  };
+  }, [isListening, isSpeechSupported, input, showDiff]);
 
   const hasHistory = history.length > 0;
   const shouldRenderSkeleton = showSkeleton || isSkeletonExiting;
@@ -503,6 +521,10 @@ const App: React.FC = () => {
           onApiKeyChange={setApiKey}
           sessionStats={sessionStats}
           onResetSessionStats={resetSessionStats}
+          anchorLanguage={anchorLanguage}
+          targetLanguage={targetLanguage}
+          onAnchorLanguageChange={setAnchorLanguage}
+          onTargetLanguageChange={setTargetLanguage}
           onSelect={setTone}
           onAddCustomTone={handleAddCustomTone}
           onDeleteCustomTone={handleDeleteCustomTone}
@@ -510,206 +532,31 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Input Section */}
-      <div className="w-full mb-12 z-20 animate-slide-up">
-        <GlassCard className="p-1" hoverEffect={false}>
-          {/* Flex Column Container to prevent overlap */}
-          <div className="flex flex-col h-[420px] p-8">
-
-            {/* AREA PRINCIPAL: Condicional entre Textarea e DiffViewer */}
-            <div className="flex-1 relative min-h-0">
-              {showDiff && originalInput ? (
-                <DiffViewer
-                  oldText={originalInput}
-                  newText={input}
-                />
-              ) : (
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={handleTextChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Enter text or use dictation..."
-                  readOnly={loading || isRefining}
-                  className={`
-                    w-full h-full bg-transparent text-2xl font-light text-white placeholder-neutral-800 
-                    resize-none focus:outline-none focus:ring-0 leading-relaxed transition-all duration-700
-                    ${isRefining ? 'animate-pulse text-neutral-500 blur-[1px]' : ''}
-                    custom-scrollbar
-                    [mask-image:linear-gradient(to_bottom,transparent_0px,black_20px,black_calc(100%-20px),transparent_100%)]
-                    py-6
-                  `}
-                  spellCheck={false}
-                />
-              )}
-            </div>
-
-            {/* Controls Toolbar - Fixed height at bottom, no overlap possible */}
-            <div className="shrink-0 pt-6 flex items-center justify-between border-t border-white/5 mt-2">
-
-              {/* Left Side: Refinement Tools */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className={`
-                    p-3 rounded-full transition-colors group relative
-                    ${(autoEnhance || contextEnabled) ? 'text-white bg-white/10 hover:bg-white/20' : 'text-neutral-600 hover:bg-white/5 hover:text-white'}
-                  `}
-                  title={`Settings`}
-                >
-                  <Sliders size={18} />
-                </button>
-
-                {!hasApiKey && (
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-full border border-white/10 bg-white/5 text-[10px] tracking-[0.15em] uppercase text-neutral-400 hover:text-white hover:border-white/30 transition-colors"
-                    title="Add a Gemini API Key (aistudio.google.com/api-keys)"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
-                    <span>API Key</span>
-                  </button>
-                )}
-
-                <div className="h-6 w-[1px] bg-neutral-800 mx-1"></div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleRefine}
-                    disabled={!input.trim() || loading || isRefining || showDiff}
-                    className={`
-                      flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-500
-                      ${isRefining
-                        ? 'bg-white/10 text-white cursor-wait'
-                        : 'hover:bg-white/5 text-neutral-500 hover:text-white'}
-                      disabled:opacity-30 disabled:cursor-not-allowed
-                    `}
-                    title={showDiff ? "Exit diff mode to enhance again" : `Refine Text`}
-                  >
-                    <Sparkles size={18} className={isRefining ? 'animate-spin-slow' : ''} />
-                    <span className="text-xs tracking-widest uppercase font-medium hidden sm:block">
-                      {isRefining ? 'Improving...' : 'Enhance'}
-                    </span>
-                  </button>
-
-                  {/* MAGIC DIFF TOGGLE */}
-                  {originalInput && !isRefining && (
-                    <div className="flex items-center gap-1 animate-fade-in bg-white/5 rounded-full p-1">
-                      {/* Preview/Diff Toggle */}
-                      <button
-                        onClick={toggleDiffView}
-                        className={`
-                            flex items-center gap-2 py-1.5 px-3 rounded-full transition-all duration-300
-                            ${showDiff
-                            ? 'bg-white/10 text-white'
-                            : 'text-neutral-500 hover:text-white hover:bg-white/10'}
-                          `}
-                        title={showDiff ? "Edit Text" : "View Changes"}
-                      >
-                        {showDiff ? (
-                          <>
-                            <GitCompareArrows size={14} />
-                            <span className="text-[10px] uppercase tracking-wider font-bold">Diff</span>
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={14} />
-                            <span className="text-[10px] uppercase tracking-wider font-bold">Preview</span>
-                          </>
-                        )}
-                      </button>
-
-                      <div className="w-[1px] h-3 bg-white/10"></div>
-
-                      {/* Revert Button */}
-                      <button
-                        onClick={handleRevert}
-                        className="p-1.5 rounded-full hover:bg-white/10 text-neutral-500 hover:text-neutral-300 transition-colors"
-                        title="Revert to Original"
-                      >
-                        <RotateCcw size={14} />
-                      </button>
-
-                      <div className="w-[1px] h-3 bg-white/10"></div>
-
-                      {/* Apply Button */}
-                      <button
-                        onClick={handleApplyEnhancement}
-                        className="
-                            flex items-center gap-1.5 py-1.5 px-3 rounded-full 
-                            bg-white text-black font-medium
-                            hover:bg-neutral-200 
-                            shadow-[0_0_12px_rgba(255,255,255,0.15)]
-                            transition-all duration-300
-                          "
-                        title="Apply Enhancement"
-                      >
-                        <Check size={14} strokeWidth={2.5} />
-                        <span className="text-[10px] uppercase tracking-wider font-bold">Apply</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Side: Action Tools */}
-              <div className="flex items-center gap-4">
-                {/* Microphone Button */}
-                {isSpeechSupported && (
-                  <div className="flex items-center gap-3">
-                    {isListening && (
-                      <span className="text-[10px] tracking-widest text-red-400 font-medium uppercase animate-pulse">
-                        REC
-                      </span>
-                    )}
-                    <button
-                      onClick={toggleListening}
-                      disabled={showDiff}
-                      className={`
-                        p-3 rounded-full transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed
-                        ${isListening
-                          ? 'bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] border border-red-500/20'
-                          : 'bg-transparent text-neutral-600 hover:text-white hover:bg-white/5'}
-                      `}
-                      title={isListening ? "Stop Recording" : "Start Dictation"}
-                    >
-                      <div className="relative">
-                        {isListening && (
-                          <span className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
-                        )}
-                        <Mic size={20} className={isListening ? "animate-pulse" : ""} />
-                      </div>
-                    </button>
-                  </div>
-                )}
-
-                <div className="h-6 w-[1px] bg-neutral-800 hidden sm:block"></div>
-
-                <button
-                  onClick={handleTranslate}
-                  disabled={!input.trim() || loading || isRefining}
-                  className={`
-                    flex items-center justify-center
-                    w-12 h-12 rounded-xl
-                    bg-white text-black
-                    hover:bg-neutral-200 hover:scale-105
-                    disabled:opacity-20 disabled:scale-100 disabled:cursor-not-allowed
-                    shadow-[0_0_40px_rgba(255,255,255,0.1)]
-                    transition-all duration-300
-                    group
-                  `}
-                  title="Translate (CMD+ENTER)"
-                >
-                  {loading ? (
-                    <Loader2 size={20} className="animate-spin opacity-50" />
-                  ) : (
-                    <Send size={20} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </GlassCard>
+      {/* Input Section - Premium Composer */}
+      <div className="w-full mb-12 z-20">
+        <Composer
+          ref={composerRef}
+          value={input}
+          onChange={handleTextChange}
+          onSubmit={handleTranslate}
+          onRefine={handleRefine}
+          onShowSettings={() => setShowSettings(true)}
+          loading={loading}
+          isRefining={isRefining}
+          isListening={isListening}
+          isSpeechSupported={isSpeechSupported}
+          hasApiKey={hasApiKey}
+          originalInput={originalInput}
+          showDiff={showDiff}
+          onToggleDiff={toggleDiffView}
+          onRevert={handleRevert}
+          onApplyEnhancement={handleApplyEnhancement}
+          onToggleListening={toggleListening}
+          autoEnhance={autoEnhance}
+          contextEnabled={contextEnabled}
+          anchorLanguage={anchorLanguage}
+          targetLanguage={targetLanguage}
+        />
       </div>
 
       {/* History Controls */}

@@ -1,12 +1,64 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle } from 'lucide-react';
-import { TranslationRecord } from '../types';
+import { TranslationRecord, SUPPORTED_LANGUAGES } from '../types';
 import { GlassCard } from './GlassCard';
 
 // ============================================================================
 // DESIGN SYSTEM: Cinematic Translation Item
 // Premium content materialization with calm, subtle animations
 // ============================================================================
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Detects if text contains predominantly RTL characters (Arabic, Hebrew)
+ */
+const detectRTL = (text: string): boolean => {
+  if (!text || text.trim().length === 0) return false;
+  const rtlChars = text.match(/[\u0590-\u05FF\uFB1D-\uFB4F\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/g);
+  const ltrChars = text.match(/[A-Za-z\u00C0-\u024F\u0100-\u017F]/g);
+  
+  if (!rtlChars) return false;
+  if (!ltrChars) return true;
+  
+  return rtlChars.length / (rtlChars.length + ltrChars.length) > 0.3;
+};
+
+/**
+ * Gets RTL status from language code
+ */
+const isLanguageRTL = (langCode: string): boolean => {
+  const lang = SUPPORTED_LANGUAGES.find(l => l.code === langCode);
+  return lang?.dir === 'rtl';
+};
+
+/**
+ * TTS Language mapping - BCP 47 tags for Web Speech API
+ */
+const getTTSLanguageTag = (langCode: string): string => {
+  const langMap: Record<string, string> = {
+    'pt': 'pt-BR',
+    'en': 'en-US',
+    'es': 'es-ES',
+    'fr': 'fr-FR',
+    'de': 'de-DE',
+    'it': 'it-IT',
+    'ja': 'ja-JP',
+    'zh': 'zh-CN',
+    'ru': 'ru-RU',
+    // New languages
+    'la': 'la',       // Latin - limited TTS support, falls back
+    'el': 'el-GR',    // Greek
+    'ko': 'ko-KR',    // Korean
+    'ar': 'ar-SA',    // Arabic (Saudi Arabia)
+    'he': 'he-IL',    // Hebrew
+    'hi': 'hi-IN',    // Hindi
+  };
+  
+  return langMap[langCode] || 'en-US';
+};
 
 interface TranslationItemProps {
   item: TranslationRecord;
@@ -79,15 +131,19 @@ const ActionButton: React.FC<ActionButtonProps> = ({
 
 // ============================================================================
 // Language Chip
-// Pixel-perfect match with LiquidSkeleton bone dimensions
+// Dynamic display based on actual translation direction
 // ============================================================================
 interface LanguageChipProps {
   sourceLang: string;
+  targetLang: string;
   delay?: number;
 }
 
-const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, delay = 0 }) => {
-  const direction = sourceLang === 'pt' ? 'PT → EN' : 'EN → PT';
+const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, targetLang, delay = 0 }) => {
+  // Format: SOURCE → TARGET (uppercase codes)
+  const sourceCode = sourceLang === 'unknown' ? '??' : sourceLang.toUpperCase();
+  const targetCode = targetLang.toUpperCase();
+  const direction = `${sourceCode} → ${targetCode}`;
   
   return (
     <span 
@@ -166,6 +222,18 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
   const wasNewOnMount = useRef(isNew);
   const shouldAnimate = wasNewOnMount.current;
 
+  // RTL Detection - for translation and original text
+  const translationDirection = useMemo(() => {
+    // First check language config, then detect from content
+    if (isLanguageRTL(item.targetLang)) return 'rtl';
+    return detectRTL(item.translation) ? 'rtl' : 'ltr';
+  }, [item.translation, item.targetLang]);
+
+  const originalDirection = useMemo(() => {
+    if (isLanguageRTL(item.sourceLang)) return 'rtl';
+    return detectRTL(item.original) ? 'rtl' : 'ltr';
+  }, [item.original, item.sourceLang]);
+
   const handleCopy = async () => {
     try {
       if (window.isSecureContext && navigator.clipboard?.writeText) {
@@ -188,7 +256,7 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
     }
   };
 
-  const handleSpeak = (text: string, lang: 'pt' | 'en') => {
+  const handleSpeak = (text: string, lang: string) => {
     if (isPlaying) {
       window.speechSynthesis.cancel();
       setIsPlaying(false);
@@ -196,7 +264,9 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === 'pt' ? 'pt-BR' : 'en-US';
+    
+    // Use the centralized TTS language mapping
+    utterance.lang = getTTSLanguageTag(lang);
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
 
@@ -233,7 +303,7 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
           <div className="flex justify-between items-start mb-4">
             {/* Left: Language direction + timestamp */}
             <div className="flex items-center gap-3">
-              <LanguageChip sourceLang={item.sourceLang} delay={0} />
+              <LanguageChip sourceLang={item.sourceLang} targetLang={item.targetLang} delay={0} />
               <Timestamp timestamp={item.timestamp} delay={50} />
             </div>
             
@@ -290,11 +360,13 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
               ============================================ */}
           <div className="space-y-3">
             <p 
-              className="
+              dir={translationDirection}
+              className={`
                 text-lg font-light leading-relaxed
                 text-neutral-200
                 selection:bg-white/20 selection:text-white
-              "
+                ${translationDirection === 'rtl' ? 'text-right' : 'text-left'}
+              `}
               style={{
                 WebkitFontSmoothing: 'antialiased',
                 MozOsxFontSmoothing: 'grayscale',
@@ -328,12 +400,14 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
               >
                 <div className="flex justify-between items-start gap-4">
                   <p 
-                    className="
+                    dir={originalDirection}
+                    className={`
                       text-sm text-neutral-500 
                       font-light leading-relaxed 
                       italic
                       flex-1
-                    "
+                      ${originalDirection === 'rtl' ? 'text-right' : 'text-left'}
+                    `}
                     style={{
                       WebkitFontSmoothing: 'antialiased',
                     }}
@@ -341,7 +415,7 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
                     "{item.original}"
                   </p>
                   <button
-                    onClick={() => handleSpeak(item.original, item.sourceLang as 'pt' | 'en')}
+                    onClick={() => handleSpeak(item.original, item.sourceLang)}
                     className="
                       p-1.5 rounded-full shrink-0
                       text-neutral-600 
