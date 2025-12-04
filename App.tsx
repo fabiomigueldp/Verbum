@@ -28,7 +28,7 @@ const STANDARD_TONES_MAP: Record<string, string> = {
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.5-pro': { input: 1.25, output: 10.00 },
   'gemini-2.5-flash': { input: 0.30, output: 2.50 },
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
 };
 
 const DEFAULT_SESSION_STATS: UsageSession = {
@@ -66,7 +66,7 @@ const App: React.FC = () => {
   const [contextEnabled, setContextEnabled] = useState(false);
   const [contextDepth, setContextDepth] = useState(64); // Default to 64
   const [showSettings, setShowSettings] = useState(false);
-  const [model, setModel] = useState<string>('gemini-2.5-flash');
+  const [model, setModel] = useState<string>('gemini-2.5-flash-lite');
   const [apiKey, setApiKey] = useState<string>('');
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
 
@@ -155,6 +155,9 @@ const App: React.FC = () => {
     const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
     if (savedModel && allowedModels.includes(savedModel)) {
       setModel(savedModel);
+    } else {
+      // Migration: Force update to new default if null or invalid
+      setModel('gemini-2.5-flash-lite');
     }
     const savedApiKey = localStorage.getItem('verbum_api_key');
     if (savedApiKey !== null) {
@@ -730,8 +733,8 @@ const App: React.FC = () => {
         {(hasHistory || shouldRenderSkeleton) ? (
           <div className="space-y-6 relative">
             {shouldRenderSkeleton && (
-              <div className="animate-fade-in">
-                <LiquidSkeleton 
+              <div className={isSkeletonExiting ? 'absolute top-0 left-0 w-full z-20 pointer-events-none' : ''}>
+                <LiquidSkeleton
                   estimatedLength={estimatedLength}
                   isExiting={isSkeletonExiting}
                 />

@@ -29,7 +29,7 @@ RULES:
 4. Output JSON.
 `;
 
-const DEFAULT_MODEL: ModelOption = "gemini-2.5-flash";
+const DEFAULT_MODEL: ModelOption = "gemini-2.5-flash-lite";
 const ALLOWED_MODELS: ModelOption[] = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"];
 
 const resolveApiKey = (apiKey?: string) => {

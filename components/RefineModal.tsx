@@ -35,10 +35,28 @@ const STANDARD_TONES: { id: string; label: string; desc: string }[] = [
   { id: 'softer', label: 'Softer Tone', desc: 'Diplomatic, empathetic, and polite.' },
 ];
 
-const MODEL_OPTIONS: { id: string; label: string; desc: string; badge?: string }[] = [
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Balanced quality & speed.', badge: 'Default' },
-  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Lightweight & fast.', badge: 'Lite' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Higher-quality output.', badge: 'Pro' },
+const MODEL_OPTIONS: { id: string; label: string; desc: string; badge?: string; badgeStyle?: string }[] = [
+  {
+    id: 'gemini-2.5-flash-lite',
+    label: 'Gemini 2.5 Flash Lite',
+    desc: 'Maximum speed. Instant latency.',
+    badge: 'Fastest',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    desc: 'Balanced performance.',
+    badge: 'Balanced',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
+  {
+    id: 'gemini-2.5-pro',
+    label: 'Gemini 2.5 Pro',
+    desc: 'Complex reasoning.',
+    badge: 'Pro',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
 ];
 
 export const RefineModal: React.FC<RefineModalProps> = ({
@@ -141,7 +159,7 @@ export const RefineModal: React.FC<RefineModalProps> = ({
               </button>
 
               {showModels && (
-                <div className="px-4 pb-4 space-y-4 animate-fade-in border-t border-white/5">
+                <div className="px-4 pt-4 pb-4 space-y-4 animate-fade-in border-t border-white/5">
                   <div className="space-y-2">
                     {MODEL_OPTIONS.map((option) => (
                       <button
@@ -157,9 +175,11 @@ export const RefineModal: React.FC<RefineModalProps> = ({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-medium text-white">{option.label}</span>
-                            <span className="text-[10px] uppercase px-2 py-1 rounded-full bg-neutral-900/70 text-neutral-300 border border-white/10 tracking-[0.15em]">
-                              {option.badge}
-                            </span>
+                            {option.badge && (
+                              <span className={`text-[10px] uppercase px-2 py-1 rounded-full border tracking-[0.15em] ${option.badgeStyle}`}>
+                                {option.badge}
+                              </span>
+                            )}
                           </div>
                           {model === option.id ? (
                             <Check size={14} className="text-white" />
