@@ -1,6 +1,6 @@
 {
   "name": "Verbum",
-  "description": "A premium, minimalist executive translator for Portuguese and English. Features a liquid glass monochrome interface and smart, context-aware localization without retention of history in the AI context.",
+  "description": "Neural translation interface for executive communication. Smart Pivot architecture supporting 15+ languages with intelligent anchor/target routing, tone refinement, and local-first privacy. Zero server persistence.",
   "requestFramePermissions": [
     "microphone"
   ]

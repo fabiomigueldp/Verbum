@@ -209,7 +209,7 @@ LANGUAGE GUARD:
             },
             detectedLanguage: {
               type: Type.STRING,
-              description: "Language code of the refined text (pt, en, or unknown).",
+              description: "ISO language code of the refined text (any supported language code, or unknown).",
             },
           },
           required: ["refined", "changes", "detectedLanguage"],

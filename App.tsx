@@ -6,6 +6,7 @@ import { LiquidSkeleton } from './components/LiquidSkeleton';
 import { RefineModal } from './components/RefineModal';
 import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
 import { Composer, ComposerRef } from './components/Composer';
+import { LandingPage } from './components/LandingPage';
 import { translateText, refineText, validateApiKey } from './services/geminiService';
 import { 
   TranslationRecord, 
@@ -63,6 +64,9 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<TranslationRecord[]>([]);
   const [newItemId, setNewItemId] = useState<string | null>(null);
 
+  // Landing Page State
+  const [showLanding, setShowLanding] = useState<boolean | null>(null);
+
   // Authorization State - Gate control
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // null = checking, false = show gate, true = authorized
   const [isEnvKeyInvalid, setIsEnvKeyInvalid] = useState(false);
@@ -106,6 +110,19 @@ const App: React.FC = () => {
     setIsAuthorized(true);
     setIsEnvKeyInvalid(false); // Clear error if user manually enters valid key
   };
+
+  // Check if user has seen landing page before
+  useEffect(() => {
+    const hasSeenLanding = localStorage.getItem('verbum_has_launched');
+    setShowLanding(hasSeenLanding !== 'true');
+  }, []);
+
+  // Handle entering the app from landing page
+  const handleEnterApp = useCallback(() => {
+    localStorage.setItem('verbum_has_launched', 'true');
+    setShowLanding(false);
+  }, []);
+
   // Check authorization on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -490,6 +507,20 @@ const App: React.FC = () => {
 
   const hasHistory = history.length > 0;
   const shouldRenderSkeleton = showSkeleton || isSkeletonExiting;
+
+  // Show landing page state - null means checking, true means show landing
+  if (showLanding === null) {
+    // Brief loading state while checking localStorage
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (showLanding) {
+    return <LandingPage onEnter={handleEnterApp} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
