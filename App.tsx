@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eraser, Command } from 'lucide-react';
+import { Eraser, Command, Languages, Database } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
@@ -7,6 +7,8 @@ import { RefineModal } from './components/RefineModal';
 import { ApiKeyGate, API_KEY_REGEX } from './components/ApiKeyGate';
 import { Composer, ComposerRef } from './components/Composer';
 import { LandingPage } from './components/LandingPage';
+import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
+import { useCollectio } from './hooks/useCollectio';
 import { translateText, refineText, validateApiKey } from './services/geminiService';
 import { 
   TranslationRecord, 
@@ -18,6 +20,9 @@ import {
   LanguageConfig,
   LanguageCode
 } from './types';
+
+// App Mode - Translation vs Collectio
+type AppMode = 'translation' | 'collectio';
 
 // Add type for webkitSpeechRecognition
 declare global {
@@ -64,6 +69,9 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<TranslationRecord[]>([]);
   const [newItemId, setNewItemId] = useState<string | null>(null);
 
+  // App Mode State - Translation vs Collectio
+  const [appMode, setAppMode] = useState<AppMode>('translation');
+
   // Landing Page State
   const [showLanding, setShowLanding] = useState<boolean | null>(null);
 
@@ -104,6 +112,12 @@ const App: React.FC = () => {
   const SKELETON_DELAY = 180;
   const baseTextRef = useRef<string>('');
   const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Resolve API key for Collectio hook
+  const resolvedApiKeyForHook = apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  
+  // Collectio Hook - Knowledge Lattice State
+  const collectio = useCollectio(resolvedApiKeyForHook);
 
   const handleGateSuccess = (key: string) => {
     setApiKey(key);
@@ -205,6 +219,11 @@ const App: React.FC = () => {
     if (savedTargetLang) {
       setTargetLanguage(savedTargetLang as Exclude<LanguageCode, 'unknown'>);
     }
+    // App Mode persistence
+    const savedAppMode = localStorage.getItem('verbum_app_mode');
+    if (savedAppMode === 'translation' || savedAppMode === 'collectio') {
+      setAppMode(savedAppMode);
+    }
   }, []);
 
   // Save persistence - DEBOUNCED for heavy items
@@ -224,6 +243,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
   useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
   useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
+  useEffect(() => { localStorage.setItem('verbum_app_mode', appMode); }, [appMode]);
 
   // Language config for API calls
   const languageConfig: LanguageConfig = {
@@ -533,6 +553,48 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* Mode Toggle - HUD Header Style */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="
+          flex items-center gap-1 p-1
+          bg-neutral-900/60 backdrop-blur-xl
+          border border-white/[0.04]
+          rounded-full
+          shadow-[0_4px_24px_rgba(0,0,0,0.3)]
+        ">
+          <button
+            onClick={() => setAppMode('translation')}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-full
+              text-[10px] font-medium uppercase tracking-[0.15em]
+              transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+              ${appMode === 'translation' 
+                ? 'bg-white/[0.1] text-white' 
+                : 'text-neutral-500 hover:text-neutral-300'
+              }
+            `}
+          >
+            <Languages size={12} />
+            Translate
+          </button>
+          <button
+            onClick={() => setAppMode('collectio')}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-full
+              text-[10px] font-medium uppercase tracking-[0.15em]
+              transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+              ${appMode === 'collectio' 
+                ? 'bg-white/[0.1] text-white' 
+                : 'text-neutral-500 hover:text-neutral-300'
+              }
+            `}
+          >
+            <Database size={12} />
+            Collectio
+          </button>
+        </div>
+      </div>
+
       {/* Settings Modal */}
       {showSettings && (
         <RefineModal
@@ -563,72 +625,114 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Input Section - Premium Composer */}
-      <div className="w-full mb-12 z-20">
-        <Composer
-          ref={composerRef}
-          value={input}
-          onChange={handleTextChange}
-          onSubmit={handleTranslate}
-          onRefine={handleRefine}
-          onShowSettings={() => setShowSettings(true)}
-          loading={loading}
-          isRefining={isRefining}
-          isListening={isListening}
-          isSpeechSupported={isSpeechSupported}
-          hasApiKey={hasApiKey}
-          originalInput={originalInput}
-          showDiff={showDiff}
-          onToggleDiff={toggleDiffView}
-          onRevert={handleRevert}
-          onApplyEnhancement={handleApplyEnhancement}
-          onToggleListening={toggleListening}
-          autoEnhance={autoEnhance}
-          contextEnabled={contextEnabled}
-          anchorLanguage={anchorLanguage}
-          targetLanguage={targetLanguage}
-        />
-      </div>
-
-      {/* History Controls */}
-      {hasHistory && (
-        <div className="w-full flex justify-between items-center mb-8 px-2 animate-fade-in opacity-60 hover:opacity-100 transition-opacity duration-500">
-          <div className="flex items-center gap-2 text-neutral-600">
-            <Command size={14} />
-            <span className="text-[10px] tracking-[0.25em] uppercase font-bold">Session History</span>
+      {/* ============================================================== */}
+      {/* TRANSLATION MODE */}
+      {/* ============================================================== */}
+      {appMode === 'translation' && (
+        <>
+          {/* Input Section - Premium Composer */}
+          <div className="w-full mb-12 z-20">
+            <Composer
+              ref={composerRef}
+              value={input}
+              onChange={handleTextChange}
+              onSubmit={handleTranslate}
+              onRefine={handleRefine}
+              onShowSettings={() => setShowSettings(true)}
+              loading={loading}
+              isRefining={isRefining}
+              isListening={isListening}
+              isSpeechSupported={isSpeechSupported}
+              hasApiKey={hasApiKey}
+              originalInput={originalInput}
+              showDiff={showDiff}
+              onToggleDiff={toggleDiffView}
+              onRevert={handleRevert}
+              onApplyEnhancement={handleApplyEnhancement}
+              onToggleListening={toggleListening}
+              autoEnhance={autoEnhance}
+              contextEnabled={contextEnabled}
+              anchorLanguage={anchorLanguage}
+              targetLanguage={targetLanguage}
+            />
           </div>
-          <button
-            onClick={clearHistory}
-            className="text-[10px] text-neutral-600 hover:text-white transition-colors flex items-center gap-2 uppercase tracking-[0.2em] font-bold py-2 px-4 rounded-full hover:bg-white/5"
-          >
-            <Eraser size={12} /> Clear All
-          </button>
-        </div>
+
+          {/* History Controls */}
+          {hasHistory && (
+            <div className="w-full flex justify-between items-center mb-8 px-2 animate-fade-in opacity-60 hover:opacity-100 transition-opacity duration-500">
+              <div className="flex items-center gap-2 text-neutral-600">
+                <Command size={14} />
+                <span className="text-[10px] tracking-[0.25em] uppercase font-bold">Session History</span>
+              </div>
+              <button
+                onClick={clearHistory}
+                className="text-[10px] text-neutral-600 hover:text-white transition-colors flex items-center gap-2 uppercase tracking-[0.2em] font-bold py-2 px-4 rounded-full hover:bg-white/5"
+              >
+                <Eraser size={12} /> Clear All
+              </button>
+            </div>
+          )}
+
+          {/* History List */}
+          <div className="w-full relative z-10 pb-20" ref={scrollRef}>
+            {(hasHistory || shouldRenderSkeleton) ? (
+              <div className="space-y-6 relative">
+                {shouldRenderSkeleton && (
+                  <div className={isSkeletonExiting ? 'absolute top-0 left-0 w-full z-20 pointer-events-none' : ''}>
+                    <LiquidSkeleton
+                      estimatedLength={estimatedLength}
+                      isExiting={isSkeletonExiting}
+                    />
+                  </div>
+                )}
+                {history.map((item) => (
+                  <TranslationItem
+                    key={item.id}
+                    item={item}
+                    onDelete={deleteItem}
+                    isNew={item.id === newItemId}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </>
       )}
 
-      {/* History List */}
-      <div className="w-full relative z-10 pb-20" ref={scrollRef}>
-        {(hasHistory || shouldRenderSkeleton) ? (
-          <div className="space-y-6 relative">
-            {shouldRenderSkeleton && (
-              <div className={isSkeletonExiting ? 'absolute top-0 left-0 w-full z-20 pointer-events-none' : ''}>
-                <LiquidSkeleton
-                  estimatedLength={estimatedLength}
-                  isExiting={isSkeletonExiting}
-                />
-              </div>
-            )}
-            {history.map((item) => (
-              <TranslationItem
-                key={item.id}
-                item={item}
-                onDelete={deleteItem}
-                isNew={item.id === newItemId}
-              />
-            ))}
+      {/* ============================================================== */}
+      {/* COLLECTIO MODE - Knowledge Lattice */}
+      {/* ============================================================== */}
+      {appMode === 'collectio' && (
+        <>
+          {/* Ingestion Deck */}
+          <div className="w-full mb-10 z-20">
+            <IngestionDeck 
+              onIngest={collectio.ingest}
+              disabled={!hasApiKey}
+            />
           </div>
-        ) : null}
-      </div>
+
+          {/* Knowledge Lattice */}
+          <div className="w-full pb-32">
+            <KnowledgeLattice
+              shards={collectio.shards}
+              onDelete={collectio.deleteShard}
+              onRetry={collectio.retry}
+            />
+          </div>
+
+          {/* Compiler HUD */}
+          <CompilerHUD
+            totalShards={collectio.totalShards}
+            readyShards={collectio.readyShards}
+            totalTokens={collectio.totalTokens}
+            sessionStats={collectio.sessionStats}
+            onCompile={collectio.compile}
+            onClearAll={collectio.clearAll}
+            onResetStats={collectio.resetStats}
+          />
+        </>
+      )}
 
     </div>
   );
