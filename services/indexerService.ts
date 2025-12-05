@@ -155,3 +155,137 @@ export const estimateReadTime = (tokenCount: number): number => {
   const minutes = words / 225; // Using 225 WPM average
   return Math.max(1, Math.ceil(minutes));
 };
+
+// ============================================================================
+// COLLECTION MANIFEST GENERATOR
+// Analyzes aggregate shard metadata to determine collection identity
+// ============================================================================
+
+export type CollectionType = 'codebase' | 'document' | 'dataset' | 'mixed';
+
+export interface CollectionManifest {
+  title: string;
+  type: CollectionType;
+  description: string;
+  suggestedFilename: string;
+}
+
+export interface ManifestResponse {
+  manifest: CollectionManifest;
+  usageMetadata?: UsageMetadata;
+}
+
+interface ShardSummary {
+  title: string;
+  domain: string;
+  tags: string[];
+  excerpt: string;
+}
+
+const MANIFEST_SYSTEM_INSTRUCTION = `
+You are a Data Librarian and Collection Analyst. Your task is to analyze a set of metadata items from collected content fragments and determine the collective identity of this collection.
+
+CLASSIFICATION RULES:
+1. If items are predominantly code snippets, functions, or technical implementations → type: "codebase"
+2. If items are text documents, articles, notes, or prose → type: "document"  
+3. If items are structured data, lists, records, or tabular information → type: "dataset"
+4. If items span multiple categories with no clear majority → type: "mixed"
+
+OUTPUT REQUIREMENTS:
+- "title": A descriptive, professional title for this collection (e.g., "React Authentication Module", "Mediterranean Recipe Collection", "Q3 Sales Analysis")
+- "type": One of: "codebase", "document", "dataset", "mixed"
+- "description": A single sentence (max 20 words) describing what this collection represents. This will be used as context for downstream AI systems.
+- "suggestedFilename": A kebab-case filename without extension (e.g., "react-auth-context", "recipe-collection")
+
+FORMAT: Output must be strictly JSON.
+`;
+
+/**
+ * Generate a collection manifest by analyzing aggregate shard metadata
+ * Uses Gemini 2.5 Flash Lite for speed and cost efficiency
+ */
+export const generateCollectionManifest = async (
+  shards: ShardSummary[],
+  apiKey?: string
+): Promise<ManifestResponse> => {
+  // Fallback manifest for error cases
+  const fallbackManifest: CollectionManifest = {
+    title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
+    type: 'mixed',
+    description: 'A curated collection of content fragments.',
+    suggestedFilename: `verbum-collection-${Date.now()}`,
+  };
+
+  if (shards.length === 0) {
+    return { manifest: fallbackManifest };
+  }
+
+  try {
+    // Build a compact representation for the LLM
+    const itemsSummary = shards.map((s, i) => 
+      `[${i + 1}] Title: "${s.title}" | Domain: ${s.domain} | Tags: ${s.tags.join(', ')} | Excerpt: "${s.excerpt}"`
+    ).join('\n');
+
+    const prompt = `Analyze this collection of ${shards.length} items and determine its collective identity:\n\n${itemsSummary}`;
+
+    const response = await getClient(apiKey).models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: prompt,
+      config: {
+        systemInstruction: MANIFEST_SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: {
+              type: Type.STRING,
+              description: "Descriptive title for the collection.",
+            },
+            type: {
+              type: Type.STRING,
+              description: "Collection type: codebase, document, dataset, or mixed.",
+            },
+            description: {
+              type: Type.STRING,
+              description: "Single sentence describing the collection (max 20 words).",
+            },
+            suggestedFilename: {
+              type: Type.STRING,
+              description: "Kebab-case filename without extension.",
+            },
+          },
+          required: ["title", "type", "description", "suggestedFilename"],
+        },
+      },
+    });
+
+    const jsonText = response.text;
+    if (!jsonText) throw new Error("No response from AI");
+
+    const parsed = JSON.parse(jsonText);
+
+    // Extract usage metadata
+    const usageMetadata: UsageMetadata | undefined = response.usageMetadata ? {
+      promptTokens: response.usageMetadata.promptTokenCount ?? 0,
+      candidatesTokens: response.usageMetadata.candidatesTokenCount ?? 0,
+      totalTokens: response.usageMetadata.totalTokenCount ?? 0,
+    } : undefined;
+
+    // Validate and sanitize the response
+    const validTypes: CollectionType[] = ['codebase', 'document', 'dataset', 'mixed'];
+    const type = validTypes.includes(parsed.type) ? parsed.type : 'mixed';
+
+    return {
+      manifest: {
+        title: parsed.title || fallbackManifest.title,
+        type,
+        description: parsed.description || fallbackManifest.description,
+        suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
+      },
+      usageMetadata,
+    };
+  } catch (error) {
+    console.error("Manifest generation error:", error);
+    return { manifest: fallbackManifest };
+  }
+};

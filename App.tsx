@@ -727,6 +727,7 @@ const App: React.FC = () => {
             readyShards={collectio.readyShards}
             totalTokens={collectio.totalTokens}
             sessionStats={collectio.sessionStats}
+            isCompiling={collectio.isCompiling}
             onCompile={collectio.compile}
             onClearAll={collectio.clearAll}
             onResetStats={collectio.resetStats}

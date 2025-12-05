@@ -1,22 +1,29 @@
 import React, { memo, useState, useCallback } from 'react';
-import { Clipboard, Check, Trash2, RotateCcw, FileText, Clock } from 'lucide-react';
+import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
 import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
 import { estimateReadTime } from '../../services/indexerService';
+import { CollectionManifest } from '../../hooks/useCollectio';
 
 // ============================================================================
 // COMPILER HUD COMPONENT
 // Floating utility bar for Collectio - HUD style controls
-// Displays stats and provides compile-to-clipboard functionality
+// Displays stats and provides smart compile-to-clipboard functionality
 // ============================================================================
+
+interface CompileResult {
+  markdown: string;
+  manifest: CollectionManifest;
+}
 
 interface CompilerHUDProps {
   totalShards: number;
   readyShards: number;
   totalTokens: number;
   sessionStats: UsageSession;
-  onCompile: () => string;
+  isCompiling: boolean;
+  onCompile: () => Promise<CompileResult>;
   onClearAll: () => void;
   onResetStats: () => void;
 }
@@ -45,53 +52,70 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   readyShards,
   totalTokens,
   sessionStats,
+  isCompiling,
   onCompile,
   onClearAll,
   onResetStats,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [lastManifest, setLastManifest] = useState<CollectionManifest | null>(null);
 
   const estimatedReadMinutes = estimateReadTime(totalTokens);
   const hasShards = totalShards > 0;
   const hasReadyShards = readyShards > 0;
 
-  // Handle compile and copy with fallback for non-secure contexts
-  const handleCompile = useCallback(async () => {
-    if (!hasReadyShards) return;
-
-    setIsAnimating(true);
-    
-    const markdown = onCompile();
-    
+  // Copy text to clipboard with fallback
+  const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
-      // Try modern clipboard API first
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(markdown);
+        await navigator.clipboard.writeText(text);
+        return true;
       } else {
         // Fallback for non-secure contexts (HTTP, localhost)
         const textArea = document.createElement('textarea');
-        textArea.value = markdown;
+        textArea.value = text;
         textArea.style.position = 'fixed';
         textArea.style.left = '-9999px';
         textArea.style.top = '-9999px';
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        document.execCommand('copy');
+        const success = document.execCommand('copy');
         document.body.removeChild(textArea);
+        return success;
       }
-      
-      setCopied(true);
-      
-      // Reset copied state after animation
-      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+      return false;
     }
-    
-    setIsAnimating(false);
-  }, [hasReadyShards, onCompile]);
+  };
+
+  // Handle async compile and copy
+  const handleCompile = useCallback(async () => {
+    if (!hasReadyShards || isCompiling) return;
+
+    try {
+      const { markdown, manifest } = await onCompile();
+      
+      if (!markdown) return;
+
+      const success = await copyToClipboard(markdown);
+      
+      if (success) {
+        setLastManifest(manifest);
+        setCopied(true);
+        
+        // Reset copied state after showing success
+        setTimeout(() => {
+          setCopied(false);
+          // Keep manifest visible a bit longer for UX
+          setTimeout(() => setLastManifest(null), 1000);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error('Compilation failed:', err);
+    }
+  }, [hasReadyShards, isCompiling, onCompile]);
 
   return (
     <div className="
@@ -108,6 +132,40 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
           className="pointer-events-auto"
         >
           <div className="px-5 py-4">
+            {/* Success Toast - Shows manifest info after compilation */}
+            {copied && lastManifest && (
+              <div className="
+                mb-4 pb-4 border-b border-white/[0.04]
+                animate-[fadeSlideIn_300ms_ease-out]
+              ">
+                <div className="flex items-center gap-3">
+                  <div className="
+                    w-8 h-8 rounded-lg
+                    bg-emerald-500/20
+                    flex items-center justify-center
+                  ">
+                    <Sparkles size={14} className="text-emerald-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-medium text-emerald-400 truncate">
+                      {lastManifest.title}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 font-mono">
+                      {lastManifest.suggestedFilename}.md • {lastManifest.type}
+                    </div>
+                  </div>
+                  <div className="
+                    px-2 py-1 rounded
+                    bg-emerald-500/10
+                    text-[9px] uppercase tracking-wider
+                    text-emerald-400/80
+                  ">
+                    Copied
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-6 flex-wrap">
               
               {/* Stats Section */}
@@ -167,7 +225,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                 {/* Clear All */}
                 <button
                   onClick={onClearAll}
-                  disabled={!hasShards}
+                  disabled={!hasShards || isCompiling}
                   className="
                     p-2 rounded-lg
                     text-neutral-600 hover:text-red-400
@@ -186,7 +244,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                 {/* Compile & Copy Button */}
                 <button
                   onClick={handleCompile}
-                  disabled={!hasReadyShards || isAnimating}
+                  disabled={!hasReadyShards || isCompiling}
                   className={`
                     flex items-center gap-2
                     px-4 py-2.5
@@ -196,15 +254,22 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     disabled:cursor-not-allowed
                     ${copied 
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                      : 'bg-neutral-200 text-neutral-900 hover:bg-white active:scale-[0.97]'
+                      : isCompiling
+                        ? 'bg-neutral-700 text-neutral-300'
+                        : 'bg-neutral-200 text-neutral-900 hover:bg-white active:scale-[0.97]'
                     }
-                    ${!copied && 'shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_2px_8px_rgba(0,0,0,0.3)]'}
-                    ${!copied && 'hover:shadow-[0_0_20px_rgba(255,255,255,0.15),0_2px_12px_rgba(0,0,0,0.4)]'}
+                    ${!copied && !isCompiling && 'shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_2px_8px_rgba(0,0,0,0.3)]'}
+                    ${!copied && !isCompiling && 'hover:shadow-[0_0_20px_rgba(255,255,255,0.15),0_2px_12px_rgba(0,0,0,0.4)]'}
                     disabled:bg-neutral-800 disabled:text-neutral-600 disabled:shadow-none
                     disabled:hover:bg-neutral-800
                   `}
                 >
-                  {copied ? (
+                  {isCompiling ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Synthesizing...
+                    </>
+                  ) : copied ? (
                     <>
                       <Check size={14} className="text-emerald-400" />
                       Compiled

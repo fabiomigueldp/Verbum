@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { indexText, estimateTokens, ShardMetadata } from '../services/indexerService';
+import { 
+  indexText, 
+  estimateTokens, 
+  ShardMetadata,
+  generateCollectionManifest,
+  CollectionManifest,
+  CollectionType
+} from '../services/indexerService';
 import { UsageMetadata, UsageSession } from '../types';
 
 // ============================================================================
@@ -48,6 +55,7 @@ export const useCollectio = (apiKey?: string) => {
   const [shards, setShards] = useState<Shard[]>([]);
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
 
   // Hydrate from localStorage
   useEffect(() => {
@@ -195,16 +203,49 @@ export const useCollectio = (apiKey?: string) => {
     }
   }, [shards, apiKey, updateStats]);
 
-  // Compile all shards to markdown
-  const compile = useCallback((): string => {
+  // Compile all shards to markdown with smart manifest generation
+  const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
     const readyShards = shards.filter(s => s.status === 'ready' && s.metadata);
-    if (readyShards.length === 0) return '';
-
-    const date = new Date().toISOString().split('T')[0];
-    const totalTokens = readyShards.reduce((sum, s) => sum + s.tokenCount, 0);
     
-    let markdown = `# Research Compilation [${date}]\n\n`;
-    markdown += `> **Total Shards:** ${readyShards.length} | **Total Tokens:** ${totalTokens.toLocaleString()}\n\n`;
+    const fallbackManifest: CollectionManifest = {
+      title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
+      type: 'mixed',
+      description: 'A curated collection of content fragments.',
+      suggestedFilename: `verbum-collection-${Date.now()}`,
+    };
+
+    if (readyShards.length === 0) {
+      return { markdown: '', manifest: fallbackManifest };
+    }
+
+    const totalTokens = readyShards.reduce((sum, s) => sum + s.tokenCount, 0);
+
+    // Generate manifest by analyzing aggregate metadata
+    let manifest: CollectionManifest;
+    try {
+      const shardSummaries = readyShards.map(s => ({
+        title: s.metadata!.title,
+        domain: s.metadata!.domain,
+        tags: s.metadata!.tags,
+        excerpt: s.content.slice(0, 100).replace(/\n/g, ' '),
+      }));
+
+      const result = await generateCollectionManifest(shardSummaries, apiKey);
+      manifest = result.manifest;
+      
+      // Update stats if we got usage metadata
+      if (result.usageMetadata) {
+        updateStats(result.usageMetadata);
+      }
+    } catch (error) {
+      console.error('Manifest generation failed, using fallback:', error);
+      manifest = fallbackManifest;
+    }
+
+    // Build markdown based on collection type
+    let markdown = `# ${manifest.title}\n\n`;
+    markdown += `> ${manifest.description}\n\n`;
+    markdown += `**Type:** ${manifest.type} | **Shards:** ${readyShards.length} | **Tokens:** ${totalTokens.toLocaleString()}\n\n`;
     markdown += `## Table of Contents\n\n`;
     
     readyShards.forEach((shard, index) => {
@@ -213,21 +254,51 @@ export const useCollectio = (apiKey?: string) => {
     
     markdown += `\n---\n\n`;
 
+    // Format content based on collection type
     readyShards.forEach((shard, index) => {
       const { title, domain, tags } = shard.metadata!;
       const tagsFormatted = tags.map(t => `#${t}`).join(' ');
       
       markdown += `## ${index + 1}. ${title}\n\n`;
       markdown += `**Domain:** ${domain} | **Tags:** ${tagsFormatted} | **Tokens:** ${shard.tokenCount.toLocaleString()}\n\n`;
-      markdown += `${shard.content}\n\n`;
+      
+      // Conditional formatting based on type
+      if (manifest.type === 'codebase') {
+        // Detect language hint from domain/tags
+        const langHint = detectCodeLanguage(domain, tags);
+        markdown += `\`\`\`${langHint}\n${shard.content}\n\`\`\`\n\n`;
+      } else {
+        markdown += `${shard.content}\n\n`;
+      }
       
       if (index < readyShards.length - 1) {
         markdown += `---\n\n`;
       }
     });
 
-    return markdown;
-  }, [shards]);
+    return { markdown, manifest };
+  }, [shards, apiKey, updateStats]);
+
+  // Helper to detect code language from metadata
+  const detectCodeLanguage = (domain: string, tags: string[]): string => {
+    const allText = `${domain} ${tags.join(' ')}`.toLowerCase();
+    
+    if (allText.includes('typescript') || allText.includes('tsx')) return 'typescript';
+    if (allText.includes('javascript') || allText.includes('jsx') || allText.includes('react')) return 'javascript';
+    if (allText.includes('python')) return 'python';
+    if (allText.includes('rust')) return 'rust';
+    if (allText.includes('go') || allText.includes('golang')) return 'go';
+    if (allText.includes('java')) return 'java';
+    if (allText.includes('c++') || allText.includes('cpp')) return 'cpp';
+    if (allText.includes('sql') || allText.includes('database')) return 'sql';
+    if (allText.includes('bash') || allText.includes('shell')) return 'bash';
+    if (allText.includes('css') || allText.includes('style')) return 'css';
+    if (allText.includes('html')) return 'html';
+    if (allText.includes('json')) return 'json';
+    if (allText.includes('yaml') || allText.includes('yml')) return 'yaml';
+    
+    return ''; // No specific hint
+  };
 
   // Computed values
   const totalShards = shards.length;
@@ -235,10 +306,22 @@ export const useCollectio = (apiKey?: string) => {
   const pendingShards = shards.filter(s => s.status === 'pending' || s.status === 'indexing').length;
   const totalTokens = shards.reduce((sum, s) => sum + s.tokenCount, 0);
 
+  // Wrapped compile function with state management
+  const compileWithState = useCallback(async () => {
+    setIsCompiling(true);
+    try {
+      const result = await compile();
+      return result;
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [compile]);
+
   return {
     shards,
     sessionStats,
     isHydrated,
+    isCompiling,
     
     // Actions
     ingest,
@@ -246,7 +329,7 @@ export const useCollectio = (apiKey?: string) => {
     clearAll,
     resetStats,
     retry,
-    compile,
+    compile: compileWithState,
     
     // Computed
     totalShards,
@@ -255,3 +338,6 @@ export const useCollectio = (apiKey?: string) => {
     totalTokens,
   };
 };
+
+// Re-export types for consumers
+export type { CollectionManifest, CollectionType } from '../services/indexerService';
