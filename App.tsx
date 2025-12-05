@@ -731,6 +731,10 @@ const App: React.FC = () => {
             onCompile={collectio.compile}
             onClearAll={collectio.clearAll}
             onResetStats={collectio.resetStats}
+            hasRecoverableShards={collectio.hasRecoverableShards}
+            onUndoDelete={collectio.undoDelete}
+            storageError={collectio.storageError}
+            duplicateDetected={collectio.duplicateDetected}
           />
         </>
       )}

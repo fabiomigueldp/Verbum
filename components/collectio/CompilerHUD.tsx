@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback } from 'react';
-import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles } from 'lucide-react';
+import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles, Undo2, AlertTriangle, Copy } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
 import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
@@ -26,6 +26,11 @@ interface CompilerHUDProps {
   onCompile: () => Promise<CompileResult>;
   onClearAll: () => void;
   onResetStats: () => void;
+  // Integrity & Safety Layer
+  hasRecoverableShards?: boolean;
+  onUndoDelete?: () => void;
+  storageError?: string | null;
+  duplicateDetected?: boolean;
 }
 
 /**
@@ -56,6 +61,10 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   onCompile,
   onClearAll,
   onResetStats,
+  hasRecoverableShards = false,
+  onUndoDelete,
+  storageError,
+  duplicateDetected = false,
 }) => {
   const [copied, setCopied] = useState(false);
   const [lastManifest, setLastManifest] = useState<CollectionManifest | null>(null);
@@ -166,6 +175,52 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
               </div>
             )}
 
+            {/* Storage Warning Banner */}
+            {storageError && (
+              <div className="
+                mb-4 pb-4 border-b border-white/[0.04]
+                animate-[fadeSlideIn_300ms_ease-out]
+              ">
+                <div className="flex items-center gap-3">
+                  <div className="
+                    w-8 h-8 rounded-lg
+                    bg-amber-500/20
+                    flex items-center justify-center
+                  ">
+                    <AlertTriangle size={14} className="text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-amber-400/90">
+                      {storageError}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Duplicate Detection Banner */}
+            {duplicateDetected && (
+              <div className="
+                mb-4 pb-4 border-b border-white/[0.04]
+                animate-[fadeSlideIn_300ms_ease-out]
+              ">
+                <div className="flex items-center gap-3">
+                  <div className="
+                    w-8 h-8 rounded-lg
+                    bg-blue-500/20
+                    flex items-center justify-center
+                  ">
+                    <Copy size={14} className="text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-blue-400/90">
+                      Duplicate content detected — shard skipped
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-6 flex-wrap">
               
               {/* Stats Section */}
@@ -221,6 +276,23 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                 >
                   <RotateCcw size={14} />
                 </button>
+
+                {/* Undo Delete - Conditionally visible */}
+                {hasRecoverableShards && onUndoDelete && (
+                  <button
+                    onClick={onUndoDelete}
+                    className="
+                      p-2 rounded-lg
+                      text-amber-500/80 hover:text-amber-400
+                      bg-amber-500/10 hover:bg-amber-500/20
+                      transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+                      animate-[fadeSlideIn_300ms_ease-out]
+                    "
+                    title="Undo Delete (5s)"
+                  >
+                    <Undo2 size={14} />
+                  </button>
+                )}
 
                 {/* Clear All */}
                 <button

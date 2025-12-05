@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   indexText, 
@@ -9,10 +9,12 @@ import {
   CollectionType
 } from '../services/indexerService';
 import { UsageMetadata, UsageSession } from '../types';
+import { computeHash } from '../utils/cryptoUtils';
 
 // ============================================================================
 // COLLECTIO STATE MANAGEMENT
 // Persistence layer for the Knowledge Lattice
+// With Integrity & Safety Layer for large data handling
 // ============================================================================
 
 export type ShardStatus = 'pending' | 'indexing' | 'ready' | 'error';
@@ -20,11 +22,14 @@ export type ShardStatus = 'pending' | 'indexing' | 'ready' | 'error';
 export interface Shard {
   id: string;
   content: string;
+  contentHash: string;
   tokenCount: number;
   timestamp: number;
   status: ShardStatus;
   metadata?: ShardMetadata;
   error?: string;
+  /** Soft delete timestamp - if set, shard is marked for deletion */
+  deletedAt?: number;
 }
 
 interface CollectioState {
@@ -34,6 +39,7 @@ interface CollectioState {
 
 const STORAGE_KEY = 'verbum_collectio';
 const STATS_KEY = 'verbum_collectio_stats';
+const SOFT_DELETE_TTL = 5000; // 5 seconds before permanent deletion
 
 const DEFAULT_SESSION_STATS: UsageSession = {
   totalInput: 0,
@@ -52,10 +58,18 @@ const calculateCost = (inputTokens: number, outputTokens: number): number => {
 };
 
 export const useCollectio = (apiKey?: string) => {
-  const [shards, setShards] = useState<Shard[]>([]);
+  // Internal state includes soft-deleted items
+  const [allShards, setAllShards] = useState<Shard[]>([]);
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
+  
+  // Storage & Integrity State
+  const [storageError, setStorageError] = useState<string | null>(null);
+  const [duplicateDetected, setDuplicateDetected] = useState(false);
+  
+  // Ref for prune timer
+  const pruneTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hydrate from localStorage
   useEffect(() => {
@@ -64,11 +78,16 @@ export const useCollectio = (apiKey?: string) => {
       if (savedShards) {
         const parsed = JSON.parse(savedShards);
         // Re-hydrate any 'indexing' shards as 'pending' (they were interrupted)
-        const rehydrated = parsed.map((shard: Shard) => ({
-          ...shard,
-          status: shard.status === 'indexing' ? 'pending' : shard.status,
-        }));
-        setShards(rehydrated);
+        // Also filter out any previously soft-deleted items on reload
+        const rehydrated = parsed
+          .filter((shard: Shard) => !shard.deletedAt)
+          .map((shard: Shard) => ({
+            ...shard,
+            status: shard.status === 'indexing' ? 'pending' : shard.status,
+            // Ensure contentHash exists for legacy data
+            contentHash: shard.contentHash || `legacy-${shard.id}`,
+          }));
+        setAllShards(rehydrated);
       }
       
       const savedStats = localStorage.getItem(STATS_KEY);
@@ -81,20 +100,81 @@ export const useCollectio = (apiKey?: string) => {
     setIsHydrated(true);
   }, []);
 
-  // Persist shards (debounced)
+  // Persist shards (debounced) with storage safeguards
   useEffect(() => {
     if (!isHydrated) return;
+    
     const timer = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(shards));
+      // Only persist non-deleted shards
+      const shardsToSave = allShards.filter(s => !s.deletedAt);
+      
+      try {
+        const serialized = JSON.stringify(shardsToSave);
+        localStorage.setItem(STORAGE_KEY, serialized);
+        // Clear any previous storage error on success
+        if (storageError) setStorageError(null);
+      } catch (e) {
+        // Handle QuotaExceededError
+        if (e instanceof DOMException && (
+          e.name === 'QuotaExceededError' ||
+          e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+        )) {
+          console.error('Storage quota exceeded:', e);
+          setStorageError('Storage full. Data will not persist after refresh. Consider clearing old shards.');
+        } else {
+          console.error('Failed to persist shards:', e);
+          setStorageError('Failed to save data. Changes may not persist.');
+        }
+      }
     }, 500);
+    
     return () => clearTimeout(timer);
-  }, [shards, isHydrated]);
+  }, [allShards, isHydrated, storageError]);
 
-  // Persist stats
+  // Persist stats with safeguards
   useEffect(() => {
     if (!isHydrated) return;
-    localStorage.setItem(STATS_KEY, JSON.stringify(sessionStats));
+    try {
+      localStorage.setItem(STATS_KEY, JSON.stringify(sessionStats));
+    } catch (e) {
+      // Stats are less critical, just log
+      console.warn('Failed to persist stats:', e);
+    }
   }, [sessionStats, isHydrated]);
+
+  // Prune soft-deleted shards after TTL
+  useEffect(() => {
+    const hasDeletedShards = allShards.some(s => s.deletedAt);
+    
+    if (!hasDeletedShards) {
+      if (pruneTimerRef.current) {
+        clearInterval(pruneTimerRef.current);
+        pruneTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Start prune timer if not already running
+    if (!pruneTimerRef.current) {
+      pruneTimerRef.current = setInterval(() => {
+        const now = Date.now();
+        setAllShards(prev => {
+          const pruned = prev.filter(s => 
+            !s.deletedAt || (now - s.deletedAt) < SOFT_DELETE_TTL
+          );
+          // Only update if something was pruned
+          return pruned.length !== prev.length ? pruned : prev;
+        });
+      }, 1000); // Check every second
+    }
+
+    return () => {
+      if (pruneTimerRef.current) {
+        clearInterval(pruneTimerRef.current);
+        pruneTimerRef.current = null;
+      }
+    };
+  }, [allShards]);
 
   // Update session stats with usage metadata
   const updateStats = useCallback((usageMetadata?: UsageMetadata) => {
@@ -110,31 +190,58 @@ export const useCollectio = (apiKey?: string) => {
     }));
   }, []);
 
-  // Ingest new content
-  const ingest = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+  // Clear duplicate detected flag
+  const clearDuplicateFlag = useCallback(() => {
+    setDuplicateDetected(false);
+  }, []);
 
-    const tokenCount = estimateTokens(content);
+  // Ingest new content with async hashing and deduplication
+  const ingest = useCallback(async (content: string) => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent) return;
+
+    // Reset duplicate flag
+    setDuplicateDetected(false);
+
+    // Compute hash asynchronously (non-blocking for large strings)
+    const contentHash = await computeHash(trimmedContent);
+
+    // Check for duplicates in active (non-deleted) shards
+    const existingShards = allShards.filter(s => !s.deletedAt);
+    const isDuplicate = existingShards.some(s => s.contentHash === contentHash);
+    
+    if (isDuplicate) {
+      console.warn('Duplicate content detected, skipping ingestion');
+      setDuplicateDetected(true);
+      // Auto-clear after 3 seconds
+      setTimeout(() => setDuplicateDetected(false), 3000);
+      return;
+    }
+
+    // Calculate token count once during ingestion
+    const tokenCount = estimateTokens(trimmedContent);
+    
     const newShard: Shard = {
       id: uuidv4(),
-      content: content.trim(),
+      content: trimmedContent,
+      contentHash,
       tokenCount,
       timestamp: Date.now(),
       status: 'pending',
     };
 
     // Add to state immediately
-    setShards(prev => [newShard, ...prev]);
+    setAllShards(prev => [newShard, ...prev]);
 
     // Start indexing
-    setShards(prev => 
+    setAllShards(prev => 
       prev.map(s => s.id === newShard.id ? { ...s, status: 'indexing' } : s)
     );
 
     try {
-      const result = await indexText(content, apiKey);
+      const result = await indexText(trimmedContent, apiKey);
       
-      setShards(prev => 
+      setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
           ...s, 
           status: 'ready',
@@ -145,7 +252,7 @@ export const useCollectio = (apiKey?: string) => {
       updateStats(result.usageMetadata);
     } catch (error) {
       console.error('Indexing failed:', error);
-      setShards(prev => 
+      setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
           ...s, 
           status: 'error',
@@ -153,16 +260,38 @@ export const useCollectio = (apiKey?: string) => {
         } : s)
       );
     }
-  }, [apiKey, updateStats]);
+  }, [apiKey, updateStats, allShards]);
 
-  // Delete a shard
+  // Soft delete a shard (can be undone within TTL)
   const deleteShard = useCallback((id: string) => {
-    setShards(prev => prev.filter(s => s.id !== id));
+    setAllShards(prev => 
+      prev.map(s => s.id === id ? { ...s, deletedAt: Date.now() } : s)
+    );
   }, []);
 
-  // Clear all shards
+  // Undo the most recent soft delete
+  const undoDelete = useCallback(() => {
+    setAllShards(prev => {
+      // Find the most recently deleted shard
+      const deletedShards = prev.filter(s => s.deletedAt);
+      if (deletedShards.length === 0) return prev;
+      
+      const mostRecent = deletedShards.reduce((a, b) => 
+        (a.deletedAt || 0) > (b.deletedAt || 0) ? a : b
+      );
+      
+      return prev.map(s => 
+        s.id === mostRecent.id ? { ...s, deletedAt: undefined } : s
+      );
+    });
+  }, []);
+
+  // Clear all shards (soft delete all)
   const clearAll = useCallback(() => {
-    setShards([]);
+    const now = Date.now();
+    setAllShards(prev => 
+      prev.map(s => s.deletedAt ? s : { ...s, deletedAt: now })
+    );
   }, []);
 
   // Reset session stats
@@ -172,17 +301,17 @@ export const useCollectio = (apiKey?: string) => {
 
   // Retry indexing for a failed shard
   const retry = useCallback(async (id: string) => {
-    const shard = shards.find(s => s.id === id);
+    const shard = allShards.find(s => s.id === id && !s.deletedAt);
     if (!shard) return;
 
-    setShards(prev => 
+    setAllShards(prev => 
       prev.map(s => s.id === id ? { ...s, status: 'indexing', error: undefined } : s)
     );
 
     try {
       const result = await indexText(shard.content, apiKey);
       
-      setShards(prev => 
+      setAllShards(prev => 
         prev.map(s => s.id === id ? { 
           ...s, 
           status: 'ready',
@@ -193,7 +322,7 @@ export const useCollectio = (apiKey?: string) => {
       updateStats(result.usageMetadata);
     } catch (error) {
       console.error('Retry indexing failed:', error);
-      setShards(prev => 
+      setAllShards(prev => 
         prev.map(s => s.id === id ? { 
           ...s, 
           status: 'error',
@@ -201,11 +330,12 @@ export const useCollectio = (apiKey?: string) => {
         } : s)
       );
     }
-  }, [shards, apiKey, updateStats]);
+  }, [allShards, apiKey, updateStats]);
 
   // Compile all shards to markdown with smart manifest generation
   const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
-    const readyShards = shards.filter(s => s.status === 'ready' && s.metadata);
+    // Filter to active (non-deleted), ready shards
+    const activeShards = allShards.filter(s => !s.deletedAt && s.status === 'ready' && s.metadata);
     
     const fallbackManifest: CollectionManifest = {
       title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
@@ -214,20 +344,21 @@ export const useCollectio = (apiKey?: string) => {
       suggestedFilename: `verbum-collection-${Date.now()}`,
     };
 
-    if (readyShards.length === 0) {
+    if (activeShards.length === 0) {
       return { markdown: '', manifest: fallbackManifest };
     }
 
-    const totalTokens = readyShards.reduce((sum, s) => sum + s.tokenCount, 0);
+    const totalTokens = activeShards.reduce((sum, s) => sum + s.tokenCount, 0);
 
     // Generate manifest by analyzing aggregate metadata
+    // Use limited excerpt (500 chars) to avoid passing huge strings
     let manifest: CollectionManifest;
     try {
-      const shardSummaries = readyShards.map(s => ({
+      const shardSummaries = activeShards.map(s => ({
         title: s.metadata!.title,
         domain: s.metadata!.domain,
         tags: s.metadata!.tags,
-        excerpt: s.content.slice(0, 100).replace(/\n/g, ' '),
+        excerpt: s.content.slice(0, 500).replace(/\n/g, ' '),
       }));
 
       const result = await generateCollectionManifest(shardSummaries, apiKey);
@@ -245,17 +376,17 @@ export const useCollectio = (apiKey?: string) => {
     // Build markdown based on collection type
     let markdown = `# ${manifest.title}\n\n`;
     markdown += `> ${manifest.description}\n\n`;
-    markdown += `**Type:** ${manifest.type} | **Shards:** ${readyShards.length} | **Tokens:** ${totalTokens.toLocaleString()}\n\n`;
+    markdown += `**Type:** ${manifest.type} | **Shards:** ${activeShards.length} | **Tokens:** ${totalTokens.toLocaleString()}\n\n`;
     markdown += `## Table of Contents\n\n`;
     
-    readyShards.forEach((shard, index) => {
+    activeShards.forEach((shard, index) => {
       markdown += `${index + 1}. [${shard.metadata!.title}](#${index + 1}-${shard.metadata!.title.toLowerCase().replace(/\s+/g, '-')})\n`;
     });
     
     markdown += `\n---\n\n`;
 
     // Format content based on collection type
-    readyShards.forEach((shard, index) => {
+    activeShards.forEach((shard, index) => {
       const { title, domain, tags } = shard.metadata!;
       const tagsFormatted = tags.map(t => `#${t}`).join(' ');
       
@@ -271,13 +402,13 @@ export const useCollectio = (apiKey?: string) => {
         markdown += `${shard.content}\n\n`;
       }
       
-      if (index < readyShards.length - 1) {
+      if (index < activeShards.length - 1) {
         markdown += `---\n\n`;
       }
     });
 
     return { markdown, manifest };
-  }, [shards, apiKey, updateStats]);
+  }, [allShards, apiKey, updateStats]);
 
   // Helper to detect code language from metadata
   const detectCodeLanguage = (domain: string, tags: string[]): string => {
@@ -300,7 +431,13 @@ export const useCollectio = (apiKey?: string) => {
     return ''; // No specific hint
   };
 
-  // Computed values
+  // Active shards (filtered view for UI - excludes soft-deleted)
+  const shards = allShards.filter(s => !s.deletedAt);
+  
+  // Check if there are recoverable (soft-deleted) shards
+  const hasRecoverableShards = allShards.some(s => s.deletedAt);
+
+  // Computed values (based on active shards only)
   const totalShards = shards.length;
   const readyShards = shards.filter(s => s.status === 'ready').length;
   const pendingShards = shards.filter(s => s.status === 'pending' || s.status === 'indexing').length;
@@ -323,13 +460,20 @@ export const useCollectio = (apiKey?: string) => {
     isHydrated,
     isCompiling,
     
+    // Integrity & Safety State
+    storageError,
+    duplicateDetected,
+    hasRecoverableShards,
+    
     // Actions
     ingest,
     deleteShard,
+    undoDelete,
     clearAll,
     resetStats,
     retry,
     compile: compileWithState,
+    clearDuplicateFlag,
     
     // Computed
     totalShards,
