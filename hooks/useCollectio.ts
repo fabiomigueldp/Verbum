@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   indexText, 
@@ -195,6 +195,28 @@ export const useCollectio = (apiKey?: string) => {
     setDuplicateDetected(false);
   }, []);
 
+  // Memoized unique domains derivation for taxonomic consistency
+  // Only computes when allShards changes, filters out soft-deleted and non-ready shards
+  const uniqueDomains = useMemo(() => {
+    const domains = new Set<string>();
+    for (const shard of allShards) {
+      if (!shard.deletedAt && shard.status === 'ready' && shard.metadata?.domain) {
+        // Normalize to Title Case for consistency
+        const normalizedDomain = shard.metadata.domain
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        domains.add(normalizedDomain);
+      }
+    }
+    // Sort alphabetically for consistent ordering, put "Uncategorized" last
+    return Array.from(domains).sort((a, b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b);
+    });
+  }, [allShards]);
+
   // Ingest new content with async hashing and deduplication
   const ingest = useCallback(async (content: string) => {
     const trimmedContent = content.trim();
@@ -239,7 +261,8 @@ export const useCollectio = (apiKey?: string) => {
     );
 
     try {
-      const result = await indexText(trimmedContent, apiKey);
+      // Pass existing domains for taxonomic consistency
+      const result = await indexText(trimmedContent, apiKey, uniqueDomains);
       
       setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
@@ -260,7 +283,7 @@ export const useCollectio = (apiKey?: string) => {
         } : s)
       );
     }
-  }, [apiKey, updateStats, allShards]);
+  }, [apiKey, updateStats, allShards, uniqueDomains]);
 
   // Soft delete a shard (can be undone within TTL)
   const deleteShard = useCallback((id: string) => {
@@ -309,7 +332,8 @@ export const useCollectio = (apiKey?: string) => {
     );
 
     try {
-      const result = await indexText(shard.content, apiKey);
+      // Pass existing domains for taxonomic consistency on retry
+      const result = await indexText(shard.content, apiKey, uniqueDomains);
       
       setAllShards(prev => 
         prev.map(s => s.id === id ? { 
@@ -330,7 +354,7 @@ export const useCollectio = (apiKey?: string) => {
         } : s)
       );
     }
-  }, [allShards, apiKey, updateStats]);
+  }, [allShards, apiKey, updateStats, uniqueDomains]);
 
   // Compile all shards to markdown with smart manifest generation
   const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
@@ -464,6 +488,9 @@ export const useCollectio = (apiKey?: string) => {
     storageError,
     duplicateDetected,
     hasRecoverableShards,
+    
+    // Domain taxonomy
+    uniqueDomains,
     
     // Actions
     ingest,

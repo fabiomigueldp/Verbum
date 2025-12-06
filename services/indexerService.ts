@@ -19,7 +19,29 @@ export interface IndexerResponse {
   usageMetadata?: UsageMetadata;
 }
 
-const INDEXER_SYSTEM_INSTRUCTION = `
+/**
+ * Generate the system instruction for the indexer
+ * Dynamically injects existing domains for taxonomic consistency
+ */
+const buildIndexerSystemInstruction = (existingDomains?: string[]): string => {
+  const domainContext = existingDomains && existingDomains.length > 0
+    ? `
+EXISTING DOMAINS IN COLLECTION:
+${existingDomains.map(d => `- "${d}"`).join('\n')}
+
+DOMAIN ASSIGNMENT RULES:
+1. PREFER assigning an existing domain from the list above if it fits semantically.
+2. Use semantic similarity - "Software Engineering" covers "Code", "Coding", "Programming", "Dev".
+3. Only create a NEW domain if the content is strictly unrelated to ALL existing domains.
+4. All domains must be in Title Case (e.g., "Software Engineering", not "software engineering").
+`
+    : `
+DOMAIN GUIDELINES:
+- Use general, broad categories (e.g., "Software Engineering" not "React Code").
+- All domains must be in Title Case (e.g., "Neuroscience", "Market Data").
+`;
+
+  return `
 You are a precision data indexer. Your task is to analyze text fragments and extract structured metadata.
 
 CRITICAL RULES:
@@ -27,15 +49,16 @@ CRITICAL RULES:
 2. Do NOT summarize the content in detail. Extract LABELS only.
 3. All output fields must be in English regardless of input language.
 4. Be authoritative and punchy with titles.
-
+${domainContext}
 OUTPUT REQUIREMENTS:
 - "title": A short, punchy English title (max 6 words). Authoritative and descriptive.
-- "domain": A general category (e.g., "Neuroscience", "Market Data", "Software Engineering", "Philosophy", "Legal", "Medical")
+- "domain": A general category. MUST be Title Case.
 - "abstract": A 10-word maximum summary of the core concept.
 - "tags": An array of exactly 3 lowercase keywords relevant to the content.
 
 FORMAT: Output must be strictly JSON.
 `;
+};
 
 const resolveApiKey = (apiKey?: string) => {
   return apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -58,17 +81,23 @@ const generateFallbackTitle = (text: string): string => {
 /**
  * Index a text fragment and extract structured metadata
  * Uses Gemini 2.5 Flash Lite for speed and cost efficiency
+ * @param text - The text content to index
+ * @param apiKey - Optional API key override
+ * @param existingDomains - Optional list of existing domains for taxonomic consistency
  */
 export const indexText = async (
   text: string,
-  apiKey?: string
+  apiKey?: string,
+  existingDomains?: string[]
 ): Promise<IndexerResponse> => {
   try {
+    const systemInstruction = buildIndexerSystemInstruction(existingDomains);
+    
     const response = await getClient(apiKey).models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: `Analyze and classify this text fragment:\n\n"""${text}"""`,
       config: {
-        systemInstruction: INDEXER_SYSTEM_INSTRUCTION,
+        systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
