@@ -68,6 +68,9 @@ export const useCollectio = (apiKey?: string) => {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [duplicateDetected, setDuplicateDetected] = useState(false);
   
+  // Selection State - Ghost Selection System
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
   // Ref for prune timer
   const pruneTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -322,6 +325,32 @@ export const useCollectio = (apiKey?: string) => {
     setSessionStats(DEFAULT_SESSION_STATS);
   }, []);
 
+  // Selection System - Toggle single shard selection
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // Select all active (non-deleted, ready) shards
+  const selectAll = useCallback(() => {
+    const activeReadyIds = allShards
+      .filter(s => !s.deletedAt && s.status === 'ready')
+      .map(s => s.id);
+    setSelectedIds(new Set(activeReadyIds));
+  }, [allShards]);
+
+  // Deselect all
+  const deselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   // Retry indexing for a failed shard
   const retry = useCallback(async (id: string) => {
     const shard = allShards.find(s => s.id === id && !s.deletedAt);
@@ -357,9 +386,15 @@ export const useCollectio = (apiKey?: string) => {
   }, [allShards, apiKey, updateStats, uniqueDomains]);
 
   // Compile all shards to markdown with smart manifest generation
+  // If selectedIds has items, compile ONLY selected shards; otherwise compile ALL ready shards
   const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
     // Filter to active (non-deleted), ready shards
-    const activeShards = allShards.filter(s => !s.deletedAt && s.status === 'ready' && s.metadata);
+    let activeShards = allShards.filter(s => !s.deletedAt && s.status === 'ready' && s.metadata);
+    
+    // If selection exists, filter to only selected shards
+    if (selectedIds.size > 0) {
+      activeShards = activeShards.filter(s => selectedIds.has(s.id));
+    }
     
     const fallbackManifest: CollectionManifest = {
       title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
@@ -432,7 +467,7 @@ export const useCollectio = (apiKey?: string) => {
     });
 
     return { markdown, manifest };
-  }, [allShards, apiKey, updateStats]);
+  }, [allShards, apiKey, updateStats, selectedIds]);
 
   // Helper to detect code language from metadata
   const detectCodeLanguage = (domain: string, tags: string[]): string => {
@@ -491,6 +526,12 @@ export const useCollectio = (apiKey?: string) => {
     
     // Domain taxonomy
     uniqueDomains,
+    
+    // Selection System
+    selectedIds,
+    toggleSelection,
+    selectAll,
+    deselectAll,
     
     // Actions
     ingest,

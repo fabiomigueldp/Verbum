@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle, Database } from 'lucide-react';
 import { TranslationRecord, SUPPORTED_LANGUAGES } from '../types';
 import { GlassCard } from './GlassCard';
 
@@ -63,6 +63,7 @@ const getTTSLanguageTag = (langCode: string): string => {
 interface TranslationItemProps {
   item: TranslationRecord;
   onDelete: (id: string) => void;
+  onIngest?: (text: string) => void; // Bridge to Collectio
   isNew?: boolean; // Flag for subtle arrival emphasis
 }
 
@@ -203,11 +204,13 @@ const Timestamp: React.FC<TimestampProps> = ({ timestamp, delay = 0 }) => {
 export const TranslationItem: React.FC<TranslationItemProps> = ({ 
   item, 
   onDelete,
+  onIngest,
   isNew = false,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [ingested, setIngested] = useState(false); // Bridge success state
   const itemRef = useRef<HTMLDivElement>(null);
   
   // Capture initial isNew value to prevent re-render flickering
@@ -270,6 +273,17 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
+  // Bridge to Collectio - Send translation to knowledge lattice
+  const handleIngest = useCallback(() => {
+    if (!onIngest || ingested) return;
+    
+    onIngest(item.translation);
+    setIngested(true);
+    
+    // Revert to original state after success animation
+    setTimeout(() => setIngested(false), 1500);
+  }, [onIngest, ingested, item.translation]);
+
   return (
     <div 
       ref={itemRef}
@@ -331,6 +345,17 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </ActionButton>
+              
+              {/* Bridge to Collectio */}
+              {onIngest && (
+                <ActionButton
+                  onClick={handleIngest}
+                  title={ingested ? "Added to Collectio" : "Send to Collectio"}
+                  isActive={ingested}
+                >
+                  {ingested ? <Check size={14} /> : <Database size={14} />}
+                </ActionButton>
+              )}
               
               <ActionButton
                 onClick={() => onDelete(item.id)}

@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback } from 'react';
-import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles, Undo2, AlertTriangle, Copy } from 'lucide-react';
+import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles, Undo2, AlertTriangle, Copy, X } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
 import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
@@ -31,6 +31,9 @@ interface CompilerHUDProps {
   onUndoDelete?: () => void;
   storageError?: string | null;
   duplicateDetected?: boolean;
+  // Selection System
+  selectedCount?: number;
+  onDeselectAll?: () => void;
 }
 
 /**
@@ -65,6 +68,8 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   onUndoDelete,
   storageError,
   duplicateDetected = false,
+  selectedCount = 0,
+  onDeselectAll,
 }) => {
   const [copied, setCopied] = useState(false);
   const [lastManifest, setLastManifest] = useState<CollectionManifest | null>(null);
@@ -313,7 +318,29 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
 
                 <div className="w-px h-8 bg-white/[0.06]" />
 
-                {/* Compile & Copy Button */}
+                {/* Deselect All - Only visible when selection > 0 */}
+                {selectedCount > 0 && onDeselectAll && (
+                  <button
+                    onClick={onDeselectAll}
+                    className="
+                      flex items-center gap-1.5
+                      px-3 py-2
+                      text-[10px] font-medium uppercase tracking-[0.1em]
+                      text-neutral-400 hover:text-white
+                      bg-white/[0.04] hover:bg-white/[0.08]
+                      border border-white/[0.06] hover:border-white/[0.1]
+                      rounded-lg
+                      transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+                      animate-[fadeSlideIn_200ms_ease-out]
+                    "
+                    title="Deselect All"
+                  >
+                    <X size={12} />
+                    <span className="tabular-nums">{selectedCount}</span>
+                  </button>
+                )}
+
+                {/* Compile & Copy Button - Context-aware label */}
                 <button
                   onClick={handleCompile}
                   disabled={!hasReadyShards || isCompiling}
@@ -346,10 +373,23 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                       <Check size={14} className="text-emerald-400" />
                       Compiled
                     </>
+                  ) : selectedCount > 0 ? (
+                    <>
+                      <FileText size={14} />
+                      <span>Compile Selection</span>
+                      <span className="
+                        ml-1 px-1.5 py-0.5 
+                        text-[9px] tabular-nums
+                        bg-neutral-900/30 
+                        rounded
+                      ">
+                        {selectedCount}
+                      </span>
+                    </>
                   ) : (
                     <>
                       <FileText size={14} />
-                      Compile & Copy
+                      Compile All
                     </>
                   )}
                 </button>

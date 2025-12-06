@@ -690,6 +690,7 @@ const App: React.FC = () => {
                     key={item.id}
                     item={item}
                     onDelete={deleteItem}
+                    onIngest={collectio.ingest}
                     isNew={item.id === newItemId}
                   />
                 ))}
@@ -718,6 +719,8 @@ const App: React.FC = () => {
               shards={collectio.shards}
               onDelete={collectio.deleteShard}
               onRetry={collectio.retry}
+              selectedIds={collectio.selectedIds}
+              onToggleSelection={collectio.toggleSelection}
             />
           </div>
 
@@ -735,6 +738,8 @@ const App: React.FC = () => {
             onUndoDelete={collectio.undoDelete}
             storageError={collectio.storageError}
             duplicateDetected={collectio.duplicateDetected}
+            selectedCount={collectio.selectedIds.size}
+            onDeselectAll={collectio.deselectAll}
           />
         </>
       )}

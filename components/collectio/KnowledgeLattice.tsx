@@ -13,6 +13,8 @@ interface KnowledgeLatticeProps {
   shards: Shard[];
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
 }
 
 /**
@@ -88,7 +90,9 @@ const LatticeSector = memo<{
   globalOffset: number;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
-}>(({ domain, shards, sectorIndex, globalOffset, onDelete, onRetry }) => {
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
+}>(({ domain, shards, sectorIndex, globalOffset, onDelete, onRetry, selectedIds, onToggleSelection }) => {
   // Staggered animation for entire sector
   const sectorDelay = `${sectorIndex * 100}ms`;
   
@@ -121,6 +125,8 @@ const LatticeSector = memo<{
             onDelete={onDelete}
             onRetry={onRetry}
             index={globalOffset + localIndex}
+            isSelected={selectedIds?.has(shard.id) ?? false}
+            onToggleSelection={onToggleSelection}
           />
         ))}
       </div>
@@ -206,7 +212,9 @@ LatticeStats.displayName = 'LatticeStats';
 export const KnowledgeLattice: React.FC<KnowledgeLatticeProps> = memo(({ 
   shards, 
   onDelete,
-  onRetry 
+  onRetry,
+  selectedIds,
+  onToggleSelection
 }) => {
   // Memoized grouping logic - groups shards by domain
   // "Uncategorized" is always placed last
@@ -265,6 +273,8 @@ export const KnowledgeLattice: React.FC<KnowledgeLatticeProps> = memo(({
             globalOffset={currentOffset}
             onDelete={onDelete}
             onRetry={onRetry}
+            selectedIds={selectedIds}
+            onToggleSelection={onToggleSelection}
           />
         );
       })}
