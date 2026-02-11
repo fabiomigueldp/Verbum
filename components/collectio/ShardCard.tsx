@@ -1,5 +1,5 @@
-import React, { memo, useState, useCallback } from 'react';
-import { Trash2, RefreshCw, AlertCircle, Check } from 'lucide-react';
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
+import { Trash2, RefreshCw, AlertCircle, Check, Copy } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
 import { Shard } from '../../hooks/useCollectio';
 
@@ -99,8 +99,31 @@ const ActionZone = memo<{
   isSelected: boolean;
   isVisible: boolean;
   onDelete: (e: React.MouseEvent) => void;
-}>(({ isSelected, isVisible, onDelete }) => (
+  onCopy: (e: React.MouseEvent) => void;
+  copied: boolean;
+}>(({ isSelected, isVisible, onDelete, onCopy, copied }) => (
   <div className="absolute top-3 right-3 z-40 flex items-center gap-2 pointer-events-none">
+    {/* Copy Button */}
+    <button
+      onClick={onCopy}
+      className={`
+        p-1.5 rounded-md transform-gpu
+        ${copied
+          ? 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/20'
+          : 'text-neutral-600 hover:text-neutral-200 bg-transparent hover:bg-white/5 border border-transparent'
+        }
+        transition-all duration-300
+        ${isVisible 
+          ? 'opacity-100 translate-y-0 pointer-events-auto' 
+          : 'opacity-0 translate-y-1 pointer-events-none'
+        }
+      `}
+      style={{ transitionTimingFunction: PREMIUM_EASE }}
+      title={copied ? 'Copied' : 'Copy Raw'}
+    >
+      {copied ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}
+    </button>
+
     {/* Delete Button */}
     <button
       onClick={onDelete}
@@ -209,6 +232,8 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
   onToggleSelection
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
   
   const isLoading = shard.status === 'pending' || shard.status === 'indexing';
   const isError = shard.status === 'error';
@@ -236,8 +261,46 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
     onDelete(shard.id);
   }, [onDelete, shard.id]);
 
+  const handleCopy = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!shard.content) return;
+
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(shard.content);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = shard.content;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+
+      setCopied(true);
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+  }, [shard.content]);
+
   // Action zone visibility
   const showActions = isHovered || isSelected;
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -282,6 +345,8 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
             isSelected={isSelected}
             isVisible={showActions}
             onDelete={handleDelete}
+            onCopy={handleCopy}
+            copied={copied}
           />
         )}
 

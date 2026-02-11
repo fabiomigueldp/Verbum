@@ -2,6 +2,7 @@ import React from 'react';
 import { RotateCcw } from 'lucide-react';
 import { UsageSession } from '../types';
 import { TokenCounter, CurrencyCounter } from './RollingCounter';
+import { formatNanoDollars } from '../utils/pricing';
 
 interface TokenTelemetryProps {
   stats: UsageSession;
@@ -55,13 +56,19 @@ export const TokenTelemetry: React.FC<TokenTelemetryProps> = ({ stats, onReset }
 
         <div className="flex flex-col ml-auto">
           <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">Est. Cost</span>
-          <CurrencyCounter 
-            value={stats.estimatedCost}
-            decimals={5}
-            className="text-sm text-neutral-300"
-            duration={1000}
-            easing="expo"
-          />
+          {stats.estimatedCostNano ? (
+            <span className="text-sm text-neutral-300 font-mono">
+              ${formatNanoDollars(BigInt(stats.estimatedCostNano), 9)}
+            </span>
+          ) : (
+            <CurrencyCounter 
+              value={stats.estimatedCost}
+              decimals={9}
+              className="text-sm text-neutral-300"
+              duration={1000}
+              easing="expo"
+            />
+          )}
         </div>
       </div>
     </div>

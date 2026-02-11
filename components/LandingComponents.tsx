@@ -740,7 +740,7 @@ const LEGAL_CONTENT: Record<Exclude<LegalModalType, null>, { title: string; cont
           <h3 className="text-sm font-medium text-[#ededed] mb-3">Data Processing</h3>
           <p className="text-sm text-neutral-500 leading-relaxed">
             Verbum operates entirely within your browser. Your API key and all text content are processed locally 
-            and transmitted directly to Google's Gemini API. No data passes through intermediate servers.
+            and transmitted directly to Google Gemini or xAI Grok APIs. No data passes through intermediate servers.
           </p>
         </section>
         <section>
@@ -753,8 +753,8 @@ const LEGAL_CONTENT: Record<Exclude<LegalModalType, null>, { title: string; cont
         <section>
           <h3 className="text-sm font-medium text-[#ededed] mb-3">Third-Party Services</h3>
           <p className="text-sm text-neutral-500 leading-relaxed">
-            This application uses Google's Gemini API for translation. Your text content is subject to 
-            Google's data handling policies when transmitted to their servers. Review Google's AI terms 
+            This application uses Google Gemini and xAI Grok APIs for translation and refinement. Your text content is subject to 
+            their respective data handling policies when transmitted to their servers. Review each provider's AI terms 
             for complete information.
           </p>
         </section>
@@ -780,14 +780,14 @@ const LEGAL_CONTENT: Record<Exclude<LegalModalType, null>, { title: string; cont
         <section>
           <h3 className="text-sm font-medium text-[#ededed] mb-3">Service Description</h3>
           <p className="text-sm text-neutral-500 leading-relaxed">
-            Verbum is a client-side translation interface that connects to Google's Gemini API using your 
-            personal API key. The application facilitates translation and tone refinement for your text content.
+            Verbum is a client-side translation interface that connects to Google Gemini and xAI Grok APIs using your 
+            personal API keys. The application facilitates translation and tone refinement for your text content.
           </p>
         </section>
         <section>
           <h3 className="text-sm font-medium text-[#ededed] mb-3">User Responsibilities</h3>
           <p className="text-sm text-neutral-500 leading-relaxed">
-            You are responsible for securing your API key, complying with Google's terms of service, and 
+            You are responsible for securing your API keys, complying with Google and xAI terms of service, and 
             ensuring your use of the translation service adheres to applicable laws. You agree not to use 
             this service for harmful, illegal, or unethical purposes.
           </p>

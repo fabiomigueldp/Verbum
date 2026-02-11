@@ -119,6 +119,7 @@ export interface UsageSession {
   totalInput: number;
   totalOutput: number;
   estimatedCost: number;
+  estimatedCostNano?: string;
   requestCount: number;
 }
 
@@ -131,9 +132,22 @@ export interface ContextMessage {
 // AI CONFIGURATION
 // ============================================================================
 
-export type ModelOption = 'gemini-2.5-flash' | 'gemini-2.5-flash-lite' | 'gemini-2.5-pro' | string;
+export type ProviderOption = 'gemini' | 'xai';
+
+export const XAI_MODEL_ID = 'grok-4-1-fast-non-reasoning' as const;
+
+export type ModelOption =
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-flash-lite'
+  | 'gemini-2.5-pro'
+  | 'gemini-2.5-flash-lite-preview-09-2025'
+  | 'gemini-2.0-flash-lite'
+  | 'gemini-3-flash-preview'
+  | typeof XAI_MODEL_ID
+  | string;
 
 export interface AiRuntimeConfig {
+  provider?: ProviderOption;
   model?: ModelOption;
   apiKey?: string;
 }

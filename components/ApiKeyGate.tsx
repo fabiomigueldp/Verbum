@@ -5,12 +5,13 @@ import { GlassCard } from './GlassCard';
 interface ApiKeyGateProps {
   onSuccess: (apiKey: string) => void;
   isEnvKeyInvalid?: boolean;
+  provider?: 'gemini' | 'xai';
 }
 
 // Gemini API Key regex pattern
 export const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
 
-export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInvalid }) => {
+export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInvalid, provider = 'gemini' }) => {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isValid, setIsValid] = useState(false);
@@ -20,8 +21,12 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
 
   // Validate key on change
   useEffect(() => {
-    setIsValid(API_KEY_REGEX.test(apiKey));
-  }, [apiKey]);
+    if (provider === 'gemini') {
+      setIsValid(API_KEY_REGEX.test(apiKey));
+    } else {
+      setIsValid(apiKey.trim().length > 0);
+    }
+  }, [apiKey, provider]);
 
   // Auto-focus input on mount with delay for animation
   useEffect(() => {
@@ -35,9 +40,6 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
     if (!isValid || isUnlocking) return;
 
     setIsUnlocking(true);
-
-    // Save to localStorage
-    localStorage.setItem('verbum_api_key', apiKey);
 
     // Trigger unlock animation, then callback
     setTimeout(() => {
@@ -112,7 +114,9 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
           <p className="mt-6 text-[11px] text-neutral-600 leading-relaxed max-w-xs">
             {isEnvKeyInvalid
               ? "The system environment variable contains an invalid API key. Please enter a new key manually."
-              : "A Gemini API credential is required to initialize the neural refinement context."
+              : provider === 'gemini'
+                ? "A Gemini API credential is required to initialize the neural refinement context."
+                : "An xAI API credential is required to initialize the neural refinement context."
             }
           </p>
         </div>
@@ -164,7 +168,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder="INSERT_API_KEY_"
+                placeholder={provider === 'gemini' ? 'INSERT_API_KEY_' : 'INSERT_XAI_KEY_'}
                 spellCheck={false}
                 autoComplete="off"
                 className={`
@@ -197,7 +201,11 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
 
           {/* Format hint */}
           <p className="mt-3 text-[9px] tracking-wider text-neutral-700 ml-1 font-mono">
-            FORMAT: AIza...{apiKey.length > 0 && <span className="text-neutral-500 ml-2">[{apiKey.length}/39]</span>}
+            {provider === 'gemini' ? (
+              <>FORMAT: AIza...{apiKey.length > 0 && <span className="text-neutral-500 ml-2">[{apiKey.length}/39]</span>}</>
+            ) : (
+              <>FORMAT: xai_...{apiKey.length > 0 && <span className="text-neutral-500 ml-2">[{apiKey.length}]</span>}</>
+            )}
           </p>
         </div>
 
@@ -228,7 +236,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onSuccess, isEnvKeyInval
 
           {/* Secondary: External link */}
           <a
-            href="https://aistudio.google.com/apikey"
+            href={provider === 'gemini' ? 'https://aistudio.google.com/apikey' : 'https://console.x.ai/team/default/api-keys'}
             target="_blank"
             rel="noopener noreferrer"
             className="

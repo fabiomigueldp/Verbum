@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
-  indexText, 
   estimateTokens, 
   ShardMetadata,
-  generateCollectionManifest,
   CollectionManifest,
   CollectionType
 } from '../services/indexerService';
-import { UsageMetadata, UsageSession } from '../types';
+import { indexText, generateCollectionManifest } from '../services/aiRouter';
+import { UsageMetadata, UsageSession, XAI_MODEL_ID } from '../types';
+import { calculateCostNano } from '../utils/pricing';
 import { computeHash } from '../utils/cryptoUtils';
 
 // ============================================================================
@@ -41,23 +41,19 @@ const STORAGE_KEY = 'verbum_collectio';
 const STATS_KEY = 'verbum_collectio_stats';
 const SOFT_DELETE_TTL = 5000; // 5 seconds before permanent deletion
 
-const DEFAULT_SESSION_STATS: UsageSession = {
-  totalInput: 0,
-  totalOutput: 0,
-  estimatedCost: 0,
-  requestCount: 0,
-};
+  const DEFAULT_SESSION_STATS: UsageSession = {
+    totalInput: 0,
+    totalOutput: 0,
+    estimatedCost: 0,
+    estimatedCostNano: '0',
+    requestCount: 0,
+  };
 
-// Token pricing per 1M tokens for gemini-2.5-flash-lite
-const FLASH_LITE_PRICING = { input: 0.075, output: 0.30 };
+const getModelId = (provider: 'gemini' | 'xai', modelId?: string) => (
+  provider === 'xai' ? XAI_MODEL_ID : (modelId || 'gemini-2.5-flash-lite')
+);
 
-const calculateCost = (inputTokens: number, outputTokens: number): number => {
-  const inputCost = (inputTokens / 1_000_000) * FLASH_LITE_PRICING.input;
-  const outputCost = (outputTokens / 1_000_000) * FLASH_LITE_PRICING.output;
-  return inputCost + outputCost;
-};
-
-export const useCollectio = (apiKey?: string) => {
+export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemini', modelId?: string) => {
   // Internal state includes soft-deleted items
   const [allShards, setAllShards] = useState<Shard[]>([]);
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
@@ -182,16 +178,22 @@ export const useCollectio = (apiKey?: string) => {
   // Update session stats with usage metadata
   const updateStats = useCallback((usageMetadata?: UsageMetadata) => {
     if (!usageMetadata) return;
+    const effectiveModelId = getModelId(provider, modelId);
+    const inputTokens = usageMetadata.promptTokens;
+    const outputTokens = usageMetadata.candidatesTokens;
+    const costNano = calculateCostNano(effectiveModelId, inputTokens, outputTokens);
     
-    const cost = calculateCost(usageMetadata.promptTokens, usageMetadata.candidatesTokens);
-    
-    setSessionStats(prev => ({
-      totalInput: prev.totalInput + usageMetadata.promptTokens,
-      totalOutput: prev.totalOutput + usageMetadata.candidatesTokens,
-      estimatedCost: prev.estimatedCost + cost,
-      requestCount: prev.requestCount + 1,
-    }));
-  }, []);
+    setSessionStats(prev => {
+      const nextNano = BigInt(prev.estimatedCostNano || '0') + costNano;
+      return {
+        totalInput: prev.totalInput + usageMetadata.promptTokens,
+        totalOutput: prev.totalOutput + usageMetadata.candidatesTokens,
+        estimatedCost: Number(nextNano) / 1_000_000_000,
+        estimatedCostNano: nextNano.toString(),
+        requestCount: prev.requestCount + 1,
+      };
+    });
+  }, [provider, modelId]);
 
   // Clear duplicate detected flag
   const clearDuplicateFlag = useCallback(() => {
@@ -265,7 +267,7 @@ export const useCollectio = (apiKey?: string) => {
 
     try {
       // Pass existing domains for taxonomic consistency
-      const result = await indexText(trimmedContent, apiKey, uniqueDomains);
+      const result = await indexText(trimmedContent, provider, apiKey, uniqueDomains);
       
       setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
@@ -293,6 +295,12 @@ export const useCollectio = (apiKey?: string) => {
     setAllShards(prev => 
       prev.map(s => s.id === id ? { ...s, deletedAt: Date.now() } : s)
     );
+    setSelectedIds(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }, []);
 
   // Undo the most recent soft delete
@@ -318,6 +326,7 @@ export const useCollectio = (apiKey?: string) => {
     setAllShards(prev => 
       prev.map(s => s.deletedAt ? s : { ...s, deletedAt: now })
     );
+    setSelectedIds(new Set());
   }, []);
 
   // Reset session stats
@@ -351,6 +360,23 @@ export const useCollectio = (apiKey?: string) => {
     setSelectedIds(new Set());
   }, []);
 
+  const selectedReadyCount = useMemo(() => {
+    if (selectedIds.size === 0) return 0;
+    return allShards.filter(s => !s.deletedAt && s.status === 'ready' && selectedIds.has(s.id)).length;
+  }, [allShards, selectedIds]);
+
+  const getSelectedRawContent = useCallback(() => {
+    if (selectedIds.size === 0) return { content: '', count: 0 };
+    const selected = allShards.filter(s => !s.deletedAt && s.status === 'ready' && selectedIds.has(s.id));
+    const chunks = selected
+      .map(s => s.content)
+      .filter(text => text.trim().length > 0);
+    return {
+      content: chunks.join('\n\n---\n\n'),
+      count: chunks.length,
+    };
+  }, [allShards, selectedIds]);
+
   // Retry indexing for a failed shard
   const retry = useCallback(async (id: string) => {
     const shard = allShards.find(s => s.id === id && !s.deletedAt);
@@ -362,7 +388,7 @@ export const useCollectio = (apiKey?: string) => {
 
     try {
       // Pass existing domains for taxonomic consistency on retry
-      const result = await indexText(shard.content, apiKey, uniqueDomains);
+      const result = await indexText(shard.content, provider, apiKey, uniqueDomains);
       
       setAllShards(prev => 
         prev.map(s => s.id === id ? { 
@@ -420,7 +446,7 @@ export const useCollectio = (apiKey?: string) => {
         excerpt: s.content.slice(0, 500).replace(/\n/g, ' '),
       }));
 
-      const result = await generateCollectionManifest(shardSummaries, apiKey);
+      const result = await generateCollectionManifest(provider, shardSummaries, apiKey);
       manifest = result.manifest;
       
       // Update stats if we got usage metadata
@@ -529,9 +555,11 @@ export const useCollectio = (apiKey?: string) => {
     
     // Selection System
     selectedIds,
+    selectedReadyCount,
     toggleSelection,
     selectAll,
     deselectAll,
+    getSelectedRawContent,
     
     // Actions
     ingest,

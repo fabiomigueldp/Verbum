@@ -10,6 +10,8 @@ import {
   UsageMetadata,
   SUPPORTED_LANGUAGES 
 } from "../types";
+import type { IndexerResponse, ManifestResponse } from "./indexerService";
+import { indexText as indexTextFromIndexer, generateCollectionManifest as manifestFromIndexer } from "./indexerService";
 
 // ============================================================================
 // SMART PIVOT TRANSLATION ENGINE
@@ -77,7 +79,14 @@ RULES:
 `;
 
 const DEFAULT_MODEL: ModelOption = "gemini-2.5-flash-lite";
-const ALLOWED_MODELS: ModelOption[] = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"];
+const ALLOWED_MODELS: ModelOption[] = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash-lite-preview-09-2025",
+  "gemini-2.0-flash-lite",
+  "gemini-3-flash-preview",
+];
 
 const resolveApiKey = (apiKey?: string) => {
   return apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -259,3 +268,13 @@ export const validateApiKey = async (apiKey: string): Promise<boolean> => {
     return false;
   }
 };
+
+// Re-export Collectio helpers for unified routing
+export const indexText = (text: string, apiKey?: string, existingDomains?: string[]): Promise<IndexerResponse> =>
+  indexTextFromIndexer(text, apiKey, existingDomains);
+
+export const generateCollectionManifest = (
+  shards: { title: string; domain: string; tags: string[]; excerpt: string }[],
+  apiKey?: string
+): Promise<ManifestResponse> =>
+  manifestFromIndexer(shards, apiKey);

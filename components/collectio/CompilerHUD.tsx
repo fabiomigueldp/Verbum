@@ -3,6 +3,7 @@ import { Check, Trash2, RotateCcw, FileText, Clock, Loader2, Sparkles, Undo2, Al
 import { GlassCard } from '../GlassCard';
 import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
+import { formatNanoDollars } from '../../utils/pricing';
 import { estimateReadTime } from '../../services/indexerService';
 import { CollectionManifest } from '../../hooks/useCollectio';
 
@@ -35,7 +36,9 @@ interface CompilerHUDProps {
   storageError?: string | null;
   duplicateDetected?: boolean;
   selectedCount?: number;
+  selectedReadyCount?: number;
   onDeselectAll?: () => void;
+  onCopySelectedRaw?: () => { content: string; count: number };
 }
 
 /**
@@ -189,15 +192,20 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   storageError,
   duplicateDetected = false,
   selectedCount = 0,
+  selectedReadyCount = 0,
   onDeselectAll,
+  onCopySelectedRaw,
 }) => {
   const [copied, setCopied] = useState(false);
   const [lastManifest, setLastManifest] = useState<CollectionManifest | null>(null);
+  const [copiedRaw, setCopiedRaw] = useState(false);
+  const [copiedRawCount, setCopiedRawCount] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const estimatedReadMinutes = estimateReadTime(totalTokens);
   const hasShards = totalShards > 0;
   const hasReadyShards = readyShards > 0;
+  const hasSelectedReady = selectedReadyCount > 0;
 
   // Copy text to clipboard with fallback
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -249,6 +257,21 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
     }
   }, [hasReadyShards, isCompiling, onCompile]);
 
+  const handleCopySelected = useCallback(async () => {
+    if (!hasSelectedReady || !onCopySelectedRaw) return;
+    const { content, count } = onCopySelectedRaw();
+    if (!content) return;
+    const success = await copyToClipboard(content);
+    if (success) {
+      setCopiedRawCount(count);
+      setCopiedRaw(true);
+      setTimeout(() => {
+        setCopiedRaw(false);
+        setTimeout(() => setCopiedRawCount(0), 1000);
+      }, 2200);
+    }
+  }, [hasSelectedReady, onCopySelectedRaw]);
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
       <div className="max-w-4xl mx-auto px-4 pb-6">
@@ -292,22 +315,31 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                 title="Duplicate content detected — shard skipped"
               />
 
+              <AnimatedBanner
+                isVisible={copiedRaw}
+                variant="success"
+                icon={<Copy size={14} className="text-emerald-400" />}
+                title={copiedRawCount > 0 ? `${copiedRawCount} original shards copied` : 'Original shards copied'}
+                subtitle="raw text • separator ---"
+                badge="Copied"
+              />
+
               {/* Main Content Row */}
-              <div className="flex items-center justify-between gap-6 flex-wrap">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
                 
                 {/* Stats Section - Stable anchor */}
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4 md:gap-5 lg:gap-6 flex-wrap md:flex-nowrap min-w-0">
                   <StatBlock label="Shards">
                     <TokenCounter value={totalShards} duration={400} />
                   </StatBlock>
                   
-                  <div className="w-px h-8 bg-white/[0.06]" />
+                  <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
                   
                   <StatBlock label="Volume">
                     <TokenCounter value={totalTokens} duration={600} />
                   </StatBlock>
                   
-                  <div className="w-px h-8 bg-white/[0.06]" />
+                  <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
                   
                   <StatBlock label="Read Time">
                     <div className="flex items-center gap-1">
@@ -316,19 +348,23 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     </div>
                   </StatBlock>
 
-                  <div className="w-px h-8 bg-white/[0.06]" />
+                  <div className="w-px h-8 bg-white/[0.06] hidden md:block" />
                   
                   <StatBlock label="Cost">
-                    <CurrencyCounter 
-                      value={sessionStats.estimatedCost}
-                      decimals={5}
-                      duration={800}
-                    />
+                    {sessionStats.estimatedCostNano && sessionStats.estimatedCostNano !== '0' ? (
+                      <span className="font-mono">${formatNanoDollars(BigInt(sessionStats.estimatedCostNano), 9)}</span>
+                    ) : (
+                      <CurrencyCounter 
+                        value={sessionStats.estimatedCost}
+                        decimals={9}
+                        duration={800}
+                      />
+                    )}
                   </StatBlock>
                 </div>
 
                 {/* Actions Section - Liquid layout */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap shrink-0">
                   <LiquidButton
                     onClick={onResetStats}
                     variant="ghost"
@@ -372,36 +408,71 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     <Trash2 size={14} />
                   </LiquidButton>
 
-                  <div className="w-px h-8 bg-white/[0.06]" />
+                  <div className="w-px h-8 bg-white/[0.06] hidden md:block" />
 
                   {/* Deselect All - Slides in with count */}
-                  <div 
+                    <div 
+                      className="grid transition-all duration-400 transform-gpu"
+                      style={{ 
+                        gridTemplateRows: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
+                        gridTemplateColumns: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
+                        transitionTimingFunction: PREMIUM_EASE,
+                      }}
+                    >
+                      <div className="overflow-hidden">
+                        <button
+                          onClick={onDeselectAll}
+                          className="
+                            flex items-center gap-1.5
+                            px-2.5 py-2
+                            text-[10px] font-medium uppercase tracking-[0.12em]
+                            text-neutral-400 hover:text-white
+                            bg-white/[0.04] hover:bg-white/[0.08]
+                            border border-white/[0.06] hover:border-white/[0.1]
+                            rounded-lg
+                            transition-all duration-300
+                            whitespace-nowrap
+                          "
+                          style={{ transitionTimingFunction: PREMIUM_EASE }}
+                          title="Deselect All"
+                        >
+                          <X size={12} />
+                          <span className="text-[9px] font-mono tabular-nums text-neutral-500">{selectedCount}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  {/* Copy Selected - Slides in */}
+                  <div
                     className="grid transition-all duration-400 transform-gpu"
-                    style={{ 
-                      gridTemplateRows: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
-                      gridTemplateColumns: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
+                    style={{
+                      gridTemplateRows: hasSelectedReady && onCopySelectedRaw ? '1fr' : '0fr',
+                      gridTemplateColumns: hasSelectedReady && onCopySelectedRaw ? '1fr' : '0fr',
                       transitionTimingFunction: PREMIUM_EASE,
                     }}
                   >
                     <div className="overflow-hidden">
                       <button
-                        onClick={onDeselectAll}
-                        className="
+                        onClick={handleCopySelected}
+                        className={`
                           flex items-center gap-1.5
-                          px-3 py-2
-                          text-[10px] font-medium uppercase tracking-[0.1em]
-                          text-neutral-400 hover:text-white
-                          bg-white/[0.04] hover:bg-white/[0.08]
-                          border border-white/[0.06] hover:border-white/[0.1]
+                          px-2.5 py-2
+                          text-[10px] font-medium uppercase tracking-[0.12em]
                           rounded-lg
-                          transition-all duration-300
+                          transition-all duration-300 transform-gpu
                           whitespace-nowrap
-                        "
+                          ${copiedRaw
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : 'text-neutral-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.1]'
+                          }
+                        `}
                         style={{ transitionTimingFunction: PREMIUM_EASE }}
-                        title="Deselect All"
+                        title="Copy Selected (Raw)"
                       >
-                        <X size={12} />
-                        <span className="tabular-nums">{selectedCount}</span>
+                        {copiedRaw ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        <span className="text-[9px] font-mono tabular-nums text-neutral-500">
+                          {selectedReadyCount}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -430,8 +501,8 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     `}
                     style={{ 
                       transitionTimingFunction: PREMIUM_EASE,
-                      // Smooth width changes
-                      minWidth: selectedCount > 0 ? '180px' : '140px',
+                      // Stable width to avoid layout shift
+                      minWidth: '170px',
                     }}
                   >
                     {isCompiling ? (
@@ -461,7 +532,16 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     ) : (
                       <>
                         <FileText size={14} />
-                        <span>Compile All</span>
+                        <span>Compile</span>
+                        <span className="
+                          ml-0.5 px-1.5 py-0.5 
+                          text-[9px] tabular-nums
+                          bg-neutral-900/30 
+                          rounded
+                          transition-all duration-300
+                        ">
+                          All
+                        </span>
                       </>
                     )}
                   </button>

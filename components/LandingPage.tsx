@@ -621,21 +621,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         {/* Bento Grid V2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card A: Privacy Architecture - Large */}
-          <BentoCard
-            title="Local-First Architecture"
-            subtitle="Your API Key never leaves localhost. Zero server transmission."
-            className="md:col-span-2"
-            delay={0}
-          >
+            <BentoCard
+              title="Local-First Architecture"
+              subtitle="Your API keys never leave localhost. Zero server transmission."
+              className="md:col-span-2"
+              delay={0}
+            >
             <PrivacySchematic />
           </BentoCard>
           
           {/* Card B: Latency/Speed */}
-          <BentoCard
-            title="Sub-Second Inference"
-            subtitle="Optimized for Gemini Flash models."
-            delay={100}
-          >
+            <BentoCard
+              title="Sub-Second Inference"
+              subtitle="Optimized for Gemini and Grok fast models."
+              delay={100}
+            >
             <LatencyCounter />
           </BentoCard>
           

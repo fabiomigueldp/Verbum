@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { ToneOption, CustomTone, UsageSession, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
@@ -14,12 +14,16 @@ interface RefineModalProps {
   onToggleContext: (enabled: boolean) => void;
   contextDepth: number;
   onUpdateContextDepth: (depth: number) => void;
+  provider: 'gemini' | 'xai';
+  onProviderChange: (provider: 'gemini' | 'xai') => void;
   model: string;
-  apiKey: string;
+  geminiApiKey: string;
+  xaiApiKey: string;
   resolvedApiKey: string;
   isEnvKey?: boolean;
   onModelChange: (model: string) => void;
-  onApiKeyChange: (key: string) => void;
+  onGeminiApiKeyChange: (key: string) => void;
+  onXaiApiKeyChange: (key: string) => void;
   sessionStats: UsageSession;
   onResetSessionStats: () => void;
   // Language Matrix
@@ -62,9 +66,30 @@ const MODEL_OPTIONS: { id: string; label: string; desc: string; badge?: string; 
     badge: 'Pro',
     badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
   },
+  {
+    id: 'gemini-2.5-flash-lite-preview-09-2025',
+    label: 'Gemini 2.5 Flash Lite Preview',
+    desc: 'Experimental speed build.',
+    badge: 'Preview',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
+  {
+    id: 'gemini-2.0-flash-lite',
+    label: 'Gemini 2.0 Flash Lite',
+    desc: 'Stable low-latency option.',
+    badge: 'Lite',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
+  {
+    id: 'gemini-3-flash-preview',
+    label: 'Gemini 3 Flash Preview',
+    desc: 'Next-gen speed preview.',
+    badge: 'Preview',
+    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
+  },
 ];
 
-export const RefineModal: React.FC<RefineModalProps> = ({
+export const RefineModal = ({
   currentTone,
   customTones,
   autoEnhance,
@@ -73,12 +98,16 @@ export const RefineModal: React.FC<RefineModalProps> = ({
   onToggleContext,
   contextDepth,
   onUpdateContextDepth,
+  provider,
+  onProviderChange,
   model,
-  apiKey,
+  geminiApiKey,
+  xaiApiKey,
   resolvedApiKey,
   isEnvKey,
   onModelChange,
-  onApiKeyChange,
+  onGeminiApiKeyChange,
+  onXaiApiKeyChange,
   sessionStats,
   onResetSessionStats,
   anchorLanguage,
@@ -103,7 +132,18 @@ export const RefineModal: React.FC<RefineModalProps> = ({
   }, [contextDepth]);
 
   const hasResolvedApiKey = Boolean(resolvedApiKey);
+  const apiKeyInputRef = useRef<HTMLInputElement>(null);
   const currentModelLabel = MODEL_OPTIONS.find((m) => m.id === model)?.label || 'Model';
+  const isGemini = provider === 'gemini';
+  const modelLabel = isGemini ? currentModelLabel : 'Grok 4.1 Fast (Non-Reasoning)';
+  const apiKeyValue = isGemini ? geminiApiKey : xaiApiKey;
+
+  useEffect(() => {
+    if (!hasResolvedApiKey && showModels) {
+      const timer = setTimeout(() => apiKeyInputRef.current?.focus(), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [hasResolvedApiKey, showModels, provider]);
 
   if (isCreating) {
     return (
@@ -276,7 +316,7 @@ export const RefineModal: React.FC<RefineModalProps> = ({
                   </div>
                   <div>
                     <span className="text-sm font-medium text-white block">Model</span>
-                    <span className="text-xs text-neutral-500 font-light">Current: {currentModelLabel}</span>
+                    <span className="text-xs text-neutral-500 font-light">Current: {modelLabel}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-neutral-500">
@@ -290,38 +330,88 @@ export const RefineModal: React.FC<RefineModalProps> = ({
 
               {showModels && (
                 <div className="px-4 pt-4 pb-4 space-y-4 animate-fade-in border-t border-white/5">
-                  <div className="space-y-2">
-                    {MODEL_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => onModelChange(option.id)}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Provider</span>
+                      <span className="text-[10px] text-neutral-600 font-light">Applies to Translation + Collectio</span>
+                    </div>
+                    <div className="relative inline-flex items-center rounded-full border border-white/10 bg-neutral-950/60 p-1">
+                      <span
                         className={`
-                          w-full text-left p-3 rounded-lg border transition-all duration-300 group relative
-                          ${model === option.id
-                            ? 'bg-white/10 border-white/15 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
-                            : 'bg-transparent border-white/5 hover:border-white/10 hover:bg-white/5'}
+                          absolute top-1 bottom-1 w-[50%] rounded-full
+                          bg-white/10 border border-white/20
+                          transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
+                          ${provider === 'xai' ? 'translate-x-full' : 'translate-x-0'}
                         `}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-white">{option.label}</span>
-                            {option.badge && (
-                              <span className={`text-[10px] uppercase px-2 py-1 rounded-full border tracking-[0.15em] ${option.badgeStyle}`}>
-                                {option.badge}
-                              </span>
+                      />
+                      {([
+                        { id: 'gemini', label: 'Gemini' },
+                        { id: 'xai', label: 'Grok' },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => onProviderChange(option.id)}
+                          className={`
+                            relative z-10 px-4 py-2 rounded-full
+                            text-[11px] uppercase tracking-[0.18em]
+                            transition-colors duration-300
+                            ${provider === option.id
+                              ? 'text-white'
+                              : 'text-neutral-500 hover:text-neutral-300'}
+                          `}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                    <div className={`transition-opacity duration-300 ${isGemini ? 'opacity-100' : 'opacity-90'}`}>
+                  {isGemini ? (
+                    <div className="space-y-2">
+                      {MODEL_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => onModelChange(option.id)}
+                          className={`
+                            w-full text-left p-3 rounded-lg border transition-all duration-300 group relative
+                            ${model === option.id
+                              ? 'bg-white/10 border-white/15 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
+                              : 'bg-transparent border-white/5 hover:border-white/10 hover:bg-white/5'}
+                          `}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-white">{option.label}</span>
+                              {option.badge && (
+                                <span className={`text-[10px] uppercase px-2 py-1 rounded-full border tracking-[0.15em] ${option.badgeStyle}`}>
+                                  {option.badge}
+                                </span>
+                              )}
+                            </div>
+                            {model === option.id ? (
+                              <Check size={14} className="text-white" />
+                            ) : (
+                              <span className="text-[10px] text-neutral-500 uppercase tracking-[0.15em]">Use</span>
                             )}
                           </div>
-                          {model === option.id ? (
-                            <Check size={14} className="text-white" />
-                          ) : (
-                            <span className="text-[10px] text-neutral-500 uppercase tracking-[0.15em]">Use</span>
-                          )}
+                          <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                            {option.desc}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg border border-white/10 bg-white/5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-medium text-white block">Grok 4.1 Fast (Non-Reasoning)</span>
+                          <span className="text-xs text-neutral-500 font-light">Fixed model for xAI</span>
                         </div>
-                        <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                          {option.desc}
-                        </p>
-                      </button>
-                    ))}
+                        <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-500">Fixed</span>
+                      </div>
+                    </div>
+                  )}
                   </div>
 
                   <div className="pt-4 border-t border-white/5 space-y-3">
@@ -344,11 +434,18 @@ export const RefineModal: React.FC<RefineModalProps> = ({
 
                     <div className="relative">
                       <input
+                        ref={apiKeyInputRef}
                         type={showApiKey ? 'text' : 'password'}
-                        value={apiKey}
-                        onChange={(e) => onApiKeyChange(e.target.value)}
-                        placeholder="Gemini API key"
-                        className="w-full bg-neutral-950/60 border border-white/10 rounded-lg px-3 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-white/30 transition-colors pr-10"
+                        value={apiKeyValue}
+                        onChange={(e) => {
+                          if (isGemini) {
+                            onGeminiApiKeyChange(e.target.value);
+                          } else {
+                            onXaiApiKeyChange(e.target.value);
+                          }
+                        }}
+                        placeholder={isGemini ? "Gemini API key" : "xAI API key"}
+                        className={`w-full bg-neutral-950/60 border rounded-lg px-3 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-white/30 transition-colors pr-10 ${hasResolvedApiKey ? 'border-white/10' : 'border-white/20 shadow-[0_0_18px_rgba(255,255,255,0.06)]'}`}
                       />
                       <button
                         type="button"
@@ -363,15 +460,31 @@ export const RefineModal: React.FC<RefineModalProps> = ({
                     {!hasResolvedApiKey && (
                       <p className="text-[11px] text-neutral-500 leading-relaxed flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-white/50 animate-pulse" />
-                        Obtain a Gemini key at{" "}
-                        <a
-                          href="https://aistudio.google.com/api-keys"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-white hover:underline"
-                        >
-                          aistudio.google.com/api-keys
-                        </a>.
+                        {isGemini ? (
+                          <>
+                            Obtain a Gemini key at{" "}
+                            <a
+                              href="https://aistudio.google.com/api-keys"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-white hover:underline"
+                            >
+                              aistudio.google.com/api-keys
+                            </a>.
+                          </>
+                        ) : (
+                          <>
+                            Obtain an xAI key at{" "}
+                          <a
+                            href="https://console.x.ai/team/default/api-keys"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-white hover:underline"
+                          >
+                            console.x.ai/api-keys
+                          </a>.
+                          </>
+                        )}
                       </p>
                     )}
                     <p className="text-[10px] text-neutral-600 font-light">

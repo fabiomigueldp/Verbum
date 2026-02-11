@@ -9,7 +9,7 @@ import { Composer, ComposerRef } from './components/Composer';
 import { LandingPage } from './components/LandingPage';
 import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
 import { useCollectio } from './hooks/useCollectio';
-import { translateText, refineText, validateApiKey } from './services/geminiService';
+import { translateText, refineText, validateApiKey } from './services/aiRouter';
 import { 
   TranslationRecord, 
   ToneOption, 
@@ -18,8 +18,11 @@ import {
   UsageSession, 
   UsageMetadata,
   LanguageConfig,
-  LanguageCode
+  LanguageCode,
+  ProviderOption,
+  XAI_MODEL_ID
 } from './types';
+import { calculateCostNano } from './utils/pricing';
 
 // App Mode - Translation vs Collectio
 type AppMode = 'translation' | 'collectio';
@@ -38,26 +41,15 @@ const STANDARD_TONES_MAP: Record<string, string> = {
   'softer': 'Diplomatic, empathetic, polite. Good for delivering feedback or bad news.'
 };
 
-// Token pricing per 1M tokens (Input / Output)
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
-};
 
 const DEFAULT_SESSION_STATS: UsageSession = {
   totalInput: 0,
   totalOutput: 0,
   estimatedCost: 0,
+  estimatedCostNano: '0',
   requestCount: 0,
 };
 
-const calculateCost = (modelId: string, inputTokens: number, outputTokens: number): number => {
-  const pricing = MODEL_PRICING[modelId] || MODEL_PRICING['gemini-2.5-flash'];
-  const inputCost = (inputTokens / 1_000_000) * pricing.input;
-  const outputCost = (outputTokens / 1_000_000) * pricing.output;
-  return inputCost + outputCost;
-};
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
@@ -86,9 +78,12 @@ const App: React.FC = () => {
   const [contextEnabled, setContextEnabled] = useState(false);
   const [contextDepth, setContextDepth] = useState(64); // Default to 64
   const [showSettings, setShowSettings] = useState(false);
+  const [provider, setProvider] = useState<ProviderOption>('gemini');
   const [model, setModel] = useState<string>('gemini-2.5-flash-lite');
-  const [apiKey, setApiKey] = useState<string>('');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [xaiApiKey, setXaiApiKey] = useState<string>('');
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
+  const sessionCostNanoRef = useRef<bigint>(0n);
 
   // Language Configuration - Smart Pivot System
   const [anchorLanguage, setAnchorLanguage] = useState<Exclude<LanguageCode, 'unknown'>>('pt');
@@ -114,13 +109,19 @@ const App: React.FC = () => {
   const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Resolve API key for Collectio hook
-  const resolvedApiKeyForHook = apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  const resolvedApiKeyForHook = provider === 'xai'
+    ? (xaiApiKey?.trim() || process.env.XAI_API_KEY || '')
+    : (geminiApiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY || '');
   
   // Collectio Hook - Knowledge Lattice State
-  const collectio = useCollectio(resolvedApiKeyForHook);
+  const collectio = useCollectio(resolvedApiKeyForHook, provider, provider === 'xai' ? XAI_MODEL_ID : model);
 
   const handleGateSuccess = (key: string) => {
-    setApiKey(key);
+    if (provider === 'xai') {
+      setXaiApiKey(key);
+    } else {
+      setGeminiApiKey(key);
+    }
     setIsAuthorized(true);
     setIsEnvKeyInvalid(false); // Clear error if user manually enters valid key
   };
@@ -140,38 +141,68 @@ const App: React.FC = () => {
   // Check authorization on mount
   useEffect(() => {
     const checkAuth = async () => {
-      const savedApiKey = localStorage.getItem('verbum_api_key');
-      const envApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      const savedGeminiKey = localStorage.getItem('verbum_api_key_gemini');
+      const savedXaiKey = localStorage.getItem('verbum_api_key_xai');
+      const legacyKey = localStorage.getItem('verbum_api_key');
+      const envGeminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      const envXaiKey = process.env.XAI_API_KEY;
 
       // 1. Check Local Storage first (User override)
-      if (savedApiKey && API_KEY_REGEX.test(savedApiKey)) {
-        const isValid = await validateApiKey(savedApiKey);
-        if (isValid) {
-          setApiKey(savedApiKey);
-          setIsAuthorized(true);
-          return;
-        } else {
-          // Stored key is invalid, clear it
-          localStorage.removeItem('verbum_api_key');
-        }
+      if (legacyKey && API_KEY_REGEX.test(legacyKey)) {
+        localStorage.setItem('verbum_api_key_gemini', legacyKey);
+        localStorage.removeItem('verbum_api_key');
       }
 
-      // 2. Check Environment Variable
-      if (envApiKey && API_KEY_REGEX.test(envApiKey)) {
-        const isValid = await validateApiKey(envApiKey);
-        if (isValid) {
-          setIsAuthorized(true);
+      if (provider === 'xai') {
+        if (savedXaiKey && savedXaiKey.trim().length > 0) {
+          const isValid = await validateApiKey('xai', savedXaiKey);
+          if (isValid) {
+            setXaiApiKey(savedXaiKey);
+            setIsAuthorized(true);
+            return;
+          }
+          localStorage.removeItem('verbum_api_key_xai');
+        }
+
+        if (envXaiKey && envXaiKey.trim().length > 0) {
+          const isValid = await validateApiKey('xai', envXaiKey);
+          if (isValid) {
+            setIsAuthorized(true);
+          } else {
+            setIsEnvKeyInvalid(true);
+            setIsAuthorized(false);
+          }
         } else {
-          setIsEnvKeyInvalid(true);
           setIsAuthorized(false);
         }
       } else {
-        setIsAuthorized(false);
+        const activeGeminiKey = savedGeminiKey || (legacyKey || '');
+        if (activeGeminiKey && API_KEY_REGEX.test(activeGeminiKey)) {
+          const isValid = await validateApiKey('gemini', activeGeminiKey);
+          if (isValid) {
+            setGeminiApiKey(activeGeminiKey);
+            setIsAuthorized(true);
+            return;
+          }
+          localStorage.removeItem('verbum_api_key_gemini');
+        }
+
+        if (envGeminiKey && API_KEY_REGEX.test(envGeminiKey)) {
+          const isValid = await validateApiKey('gemini', envGeminiKey);
+          if (isValid) {
+            setIsAuthorized(true);
+          } else {
+            setIsEnvKeyInvalid(true);
+            setIsAuthorized(false);
+          }
+        } else {
+          setIsAuthorized(false);
+        }
       }
     };
 
     checkAuth();
-  }, []);
+  }, [provider]);
   // Load persistence
   useEffect(() => {
     const savedHistory = localStorage.getItem('verbum_history');
@@ -194,21 +225,45 @@ const App: React.FC = () => {
     if (savedContextDepth) {
       try { setContextDepth(JSON.parse(savedContextDepth)); } catch (e) { console.error("Context Depth parse error", e); }
     }
+    const savedProvider = localStorage.getItem('verbum_provider');
+    if (savedProvider === 'gemini' || savedProvider === 'xai') {
+      setProvider(savedProvider);
+    }
+
     const savedModel = localStorage.getItem('verbum_model');
-    const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+    const allowedModels = [
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash-lite-preview-09-2025',
+      'gemini-2.0-flash-lite',
+      'gemini-3-flash-preview',
+    ];
     if (savedModel && allowedModels.includes(savedModel)) {
       setModel(savedModel);
     } else {
-      // Migration: Force update to new default if null or invalid
       setModel('gemini-2.5-flash-lite');
     }
-    const savedApiKey = localStorage.getItem('verbum_api_key');
-    if (savedApiKey !== null) {
-      setApiKey(savedApiKey);
+
+    const savedGeminiKey = localStorage.getItem('verbum_api_key_gemini');
+    if (savedGeminiKey !== null) {
+      setGeminiApiKey(savedGeminiKey);
+    }
+    const savedXaiKey = localStorage.getItem('verbum_api_key_xai');
+    if (savedXaiKey !== null) {
+      setXaiApiKey(savedXaiKey);
     }
     const savedSessionStats = localStorage.getItem('verbum_session_stats');
     if (savedSessionStats) {
-      try { setSessionStats(JSON.parse(savedSessionStats)); } catch (e) { console.error("Session stats parse error", e); }
+      try {
+        const parsed = JSON.parse(savedSessionStats) as UsageSession;
+        setSessionStats(parsed);
+        if (parsed.estimatedCostNano) {
+          sessionCostNanoRef.current = BigInt(parsed.estimatedCostNano);
+        }
+      } catch (e) {
+        console.error("Session stats parse error", e);
+      }
     }
     // Language settings
     const savedAnchorLang = localStorage.getItem('verbum_anchor_language');
@@ -238,8 +293,17 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('verbum_auto_enhance', JSON.stringify(autoEnhance)); }, [autoEnhance]);
   useEffect(() => { localStorage.setItem('verbum_context_enabled', JSON.stringify(contextEnabled)); }, [contextEnabled]);
   useEffect(() => { localStorage.setItem('verbum_context_depth', JSON.stringify(contextDepth)); }, [contextDepth]);
-  useEffect(() => { localStorage.setItem('verbum_model', model); }, [model]);
-  useEffect(() => { localStorage.setItem('verbum_api_key', apiKey); }, [apiKey]);
+  useEffect(() => { localStorage.setItem('verbum_provider', provider); }, [provider]);
+  useEffect(() => {
+    if (provider === 'xai') {
+      setModel(XAI_MODEL_ID);
+      localStorage.setItem('verbum_model', XAI_MODEL_ID);
+      return;
+    }
+    localStorage.setItem('verbum_model', model);
+  }, [model, provider]);
+  useEffect(() => { localStorage.setItem('verbum_api_key_gemini', geminiApiKey); }, [geminiApiKey]);
+  useEffect(() => { localStorage.setItem('verbum_api_key_xai', xaiApiKey); }, [xaiApiKey]);
   useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
   useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
   useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
@@ -262,7 +326,10 @@ const App: React.FC = () => {
   };
 
   const resolveApiKey = () => {
-    return (apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY || '');
+    if (provider === 'xai') {
+      return (xaiApiKey?.trim() || process.env.XAI_API_KEY || '');
+    }
+    return (geminiApiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY || '');
   };
 
   const resolvedApiKey = resolveApiKey();
@@ -271,17 +338,25 @@ const App: React.FC = () => {
   const updateSessionStats = (usageMetadata: UsageMetadata | undefined) => {
     if (!usageMetadata) return;
 
-    const cost = calculateCost(model, usageMetadata.promptTokens, usageMetadata.candidatesTokens);
+    const modelId = provider === 'xai' ? XAI_MODEL_ID : model;
+    const inputTokens = usageMetadata.promptTokens;
+    const outputTokens = usageMetadata.candidatesTokens;
+    const costNano = calculateCostNano(modelId, inputTokens, outputTokens);
+    const newTotalNano = sessionCostNanoRef.current + costNano;
+    sessionCostNanoRef.current = newTotalNano;
+    const exactCost = Number(newTotalNano) / 1_000_000_000;
 
     setSessionStats(prev => ({
       totalInput: prev.totalInput + usageMetadata.promptTokens,
       totalOutput: prev.totalOutput + usageMetadata.candidatesTokens,
-      estimatedCost: prev.estimatedCost + cost,
+      estimatedCost: exactCost,
+      estimatedCostNano: newTotalNano.toString(),
       requestCount: prev.requestCount + 1,
     }));
   };
 
   const resetSessionStats = () => {
+    sessionCostNanoRef.current = 0n;
     setSessionStats(DEFAULT_SESSION_STATS);
   };
 
@@ -330,7 +405,7 @@ const App: React.FC = () => {
         });
       }
 
-      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey });
+      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider });
 
       // Update session stats with usage metadata
       updateSessionStats(result.usageMetadata);
@@ -402,7 +477,7 @@ const App: React.FC = () => {
     const currentText = input;
 
     try {
-      const result = await refineText(currentText, instruction, { model, apiKey: effectiveApiKey });
+      const result = await refineText(currentText, instruction, { model, apiKey: effectiveApiKey, provider });
 
       // Update session stats with usage metadata
       updateSessionStats(result.usageMetadata);
@@ -549,6 +624,7 @@ const App: React.FC = () => {
       {isAuthorized === false && (
         <ApiKeyGate
           onSuccess={handleGateSuccess}
+          provider={provider}
           isEnvKeyInvalid={isEnvKeyInvalid}
         />
       )}
@@ -607,11 +683,21 @@ const App: React.FC = () => {
           contextDepth={contextDepth}
           onUpdateContextDepth={setContextDepth}
           model={model}
-          apiKey={apiKey}
+          provider={provider}
+          geminiApiKey={geminiApiKey}
+          xaiApiKey={xaiApiKey}
           resolvedApiKey={resolvedApiKey}
-          isEnvKey={Boolean(!apiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY))}
+          isEnvKey={provider === 'xai'
+            ? Boolean(!xaiApiKey && process.env.XAI_API_KEY)
+            : Boolean(!geminiApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY))}
+          onProviderChange={(nextProvider) => {
+            setProvider(nextProvider);
+            setIsEnvKeyInvalid(false);
+            setIsAuthorized(null);
+          }}
           onModelChange={setModel}
-          onApiKeyChange={setApiKey}
+          onGeminiApiKeyChange={setGeminiApiKey}
+          onXaiApiKeyChange={setXaiApiKey}
           sessionStats={sessionStats}
           onResetSessionStats={resetSessionStats}
           anchorLanguage={anchorLanguage}
@@ -644,6 +730,7 @@ const App: React.FC = () => {
               isListening={isListening}
               isSpeechSupported={isSpeechSupported}
               hasApiKey={hasApiKey}
+              provider={provider}
               originalInput={originalInput}
               showDiff={showDiff}
               onToggleDiff={toggleDiffView}
@@ -739,7 +826,9 @@ const App: React.FC = () => {
             storageError={collectio.storageError}
             duplicateDetected={collectio.duplicateDetected}
             selectedCount={collectio.selectedIds.size}
+            selectedReadyCount={collectio.selectedReadyCount}
             onDeselectAll={collectio.deselectAll}
+            onCopySelectedRaw={collectio.getSelectedRawContent}
           />
         </>
       )}
