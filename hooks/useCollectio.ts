@@ -23,6 +23,7 @@ export interface Shard {
   id: string;
   content: string;
   contentHash: string;
+  ingestSeq: number;
   tokenCount: number;
   timestamp: number;
   status: ShardStatus;
@@ -30,6 +31,27 @@ export interface Shard {
   error?: string;
   /** Soft delete timestamp - if set, shard is marked for deletion */
   deletedAt?: number;
+  deletedTxId?: string;
+}
+
+export type UndoTransactionKind = 'delete_one' | 'clear_all';
+export type UndoTransactionStatus = 'open' | 'undone' | 'expired';
+
+export interface UndoTransaction {
+  id: string;
+  kind: UndoTransactionKind;
+  shardIds: string[];
+  createdAt: number;
+  expiresAt: number;
+  status: UndoTransactionStatus;
+}
+
+export interface UndoState {
+  canUndo: boolean;
+  kind: UndoTransactionKind | null;
+  affectedCount: number;
+  expiresAt: number | null;
+  msRemaining: number;
 }
 
 interface CollectioState {
@@ -38,8 +60,95 @@ interface CollectioState {
 }
 
 const STORAGE_KEY = 'verbum_collectio';
+const STORAGE_KEY_V2 = 'verbum_collectio_v2';
 const STATS_KEY = 'verbum_collectio_stats';
 const SOFT_DELETE_TTL = 5000; // 5 seconds before permanent deletion
+
+interface PersistedCollectioV2 {
+  version: 2;
+  shards: Shard[];
+  undoTransactions: UndoTransaction[];
+  nextIngestSeq: number;
+}
+
+const normalizeShard = (shard: Shard): Shard => ({
+  ...shard,
+  status: shard.status === 'indexing' ? 'pending' : shard.status,
+  contentHash: shard.contentHash || `legacy-${shard.id}`,
+});
+
+const expireTransactions = (
+  shards: Shard[],
+  transactions: UndoTransaction[],
+  now: number
+) => {
+  const expiredTxIds = new Set(
+    transactions
+      .filter(tx => tx.status === 'open' && tx.expiresAt <= now)
+      .map(tx => tx.id)
+  );
+
+  if (expiredTxIds.size === 0) {
+    return { shards, transactions };
+  }
+
+  const expiredShardIds = new Set<string>();
+  for (const tx of transactions) {
+    if (expiredTxIds.has(tx.id)) {
+      for (const shardId of tx.shardIds) {
+        expiredShardIds.add(shardId);
+      }
+    }
+  }
+
+  const nextShards = shards.filter(shard => {
+    if (!shard.deletedAt) return true;
+    if (!shard.deletedTxId) return false;
+    return !expiredShardIds.has(shard.id);
+  });
+
+  const nextTransactions = transactions.map(tx => (
+    expiredTxIds.has(tx.id) ? { ...tx, status: 'expired' as const } : tx
+  ));
+
+  return { shards: nextShards, transactions: nextTransactions };
+};
+
+const isUndoTransaction = (value: unknown): value is UndoTransaction => {
+  if (!value || typeof value !== 'object') return false;
+  const tx = value as Partial<UndoTransaction>;
+  return (
+    typeof tx.id === 'string' &&
+    (tx.kind === 'delete_one' || tx.kind === 'clear_all') &&
+    Array.isArray(tx.shardIds) &&
+    typeof tx.createdAt === 'number' &&
+    typeof tx.expiresAt === 'number' &&
+    (tx.status === 'open' || tx.status === 'undone' || tx.status === 'expired')
+  );
+};
+
+const inferAndNormalizeShards = (parsedShards: Shard[]): Shard[] => {
+  let maxIngestSeq = 0;
+  for (const shard of parsedShards) {
+    if (typeof shard.ingestSeq === 'number' && Number.isFinite(shard.ingestSeq)) {
+      maxIngestSeq = Math.max(maxIngestSeq, shard.ingestSeq);
+    }
+  }
+
+  let inferredIngestSeq = maxIngestSeq + parsedShards.length;
+
+  return parsedShards.map((rawShard: Shard) => {
+    const hasValidIngestSeq = typeof rawShard.ingestSeq === 'number' && Number.isFinite(rawShard.ingestSeq);
+    if (!hasValidIngestSeq) {
+      inferredIngestSeq -= 1;
+    }
+    const normalized = normalizeShard(rawShard);
+    return {
+      ...normalized,
+      ingestSeq: hasValidIngestSeq ? rawShard.ingestSeq : inferredIngestSeq,
+    };
+  });
+};
 
   const DEFAULT_SESSION_STATS: UsageSession = {
     totalInput: 0,
@@ -56,6 +165,7 @@ const getModelId = (provider: 'gemini' | 'xai', modelId?: string) => (
 export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemini', modelId?: string) => {
   // Internal state includes soft-deleted items
   const [allShards, setAllShards] = useState<Shard[]>([]);
+  const [undoTransactions, setUndoTransactions] = useState<UndoTransaction[]>([]);
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
@@ -67,53 +177,109 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
   // Selection State - Ghost Selection System
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
-  // Ref for prune timer
-  const pruneTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs for undo scheduling and stale closure avoidance
+  const expiryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const allShardsRef = useRef<Shard[]>([]);
+  const undoTransactionsRef = useRef<UndoTransaction[]>([]);
+  const nextIngestSeqRef = useRef(1);
+
+  useEffect(() => {
+    allShardsRef.current = allShards;
+  }, [allShards]);
+
+  useEffect(() => {
+    undoTransactionsRef.current = undoTransactions;
+  }, [undoTransactions]);
+
+  const expireDueTransactions = useCallback((now: number) => {
+    const { shards, transactions } = expireTransactions(
+      allShardsRef.current,
+      undoTransactionsRef.current,
+      now,
+    );
+
+    if (shards !== allShardsRef.current) {
+      allShardsRef.current = shards;
+      setAllShards(shards);
+    }
+
+    if (transactions !== undoTransactionsRef.current) {
+      undoTransactionsRef.current = transactions;
+      setUndoTransactions(transactions);
+    }
+  }, []);
 
   // Hydrate from localStorage
   useEffect(() => {
     try {
-      const savedShards = localStorage.getItem(STORAGE_KEY);
-      if (savedShards) {
-        const parsed = JSON.parse(savedShards);
-        // Re-hydrate any 'indexing' shards as 'pending' (they were interrupted)
-        // Also filter out any previously soft-deleted items on reload
-        const rehydrated = parsed
-          .filter((shard: Shard) => !shard.deletedAt)
-          .map((shard: Shard) => ({
-            ...shard,
-            status: shard.status === 'indexing' ? 'pending' : shard.status,
-            // Ensure contentHash exists for legacy data
-            contentHash: shard.contentHash || `legacy-${shard.id}`,
-          }));
-        setAllShards(rehydrated);
+      const now = Date.now();
+      const savedV2 = localStorage.getItem(STORAGE_KEY_V2);
+      let hydratedFromV2 = false;
+      if (savedV2) {
+        const parsedV2 = JSON.parse(savedV2) as PersistedCollectioV2;
+        if (parsedV2 && parsedV2.version === 2 && Array.isArray(parsedV2.shards)) {
+          const normalizedShards = inferAndNormalizeShards(parsedV2.shards);
+          const parsedTransactions = Array.isArray(parsedV2.undoTransactions)
+            ? parsedV2.undoTransactions.filter(isUndoTransaction)
+            : [];
+          const { shards, transactions } = expireTransactions(normalizedShards, parsedTransactions, now);
+          setAllShards(shards);
+          setUndoTransactions(transactions);
+
+          const inferredNext = shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
+          const persistedNext = typeof parsedV2.nextIngestSeq === 'number' && Number.isFinite(parsedV2.nextIngestSeq)
+            ? parsedV2.nextIngestSeq
+            : 1;
+          nextIngestSeqRef.current = Math.max(inferredNext, persistedNext);
+          hydratedFromV2 = true;
+        }
       }
-      
+
+      if (!hydratedFromV2) {
+        const savedShards = localStorage.getItem(STORAGE_KEY);
+        if (savedShards) {
+          const parsed = JSON.parse(savedShards) as Shard[];
+          const rehydrated = inferAndNormalizeShards(parsed.filter((shard: Shard) => !shard.deletedAt));
+          setAllShards(rehydrated);
+          setUndoTransactions([]);
+          nextIngestSeqRef.current = rehydrated.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
+        } else {
+          nextIngestSeqRef.current = 1;
+          setUndoTransactions([]);
+        }
+      }
+
       const savedStats = localStorage.getItem(STATS_KEY);
       if (savedStats) {
         setSessionStats(JSON.parse(savedStats));
       }
     } catch (e) {
       console.error('Failed to hydrate Collectio state:', e);
+      nextIngestSeqRef.current = 1;
+      setUndoTransactions([]);
     }
     setIsHydrated(true);
   }, []);
 
-  // Persist shards (debounced) with storage safeguards
+  // Persist shards and undo transactions (debounced) with storage safeguards
   useEffect(() => {
     if (!isHydrated) return;
-    
+
     const timer = setTimeout(() => {
-      // Only persist non-deleted shards
-      const shardsToSave = allShards.filter(s => !s.deletedAt);
-      
+      const v2Payload: PersistedCollectioV2 = {
+        version: 2,
+        shards: allShards,
+        undoTransactions,
+        nextIngestSeq: nextIngestSeqRef.current,
+      };
+
+      const legacyShards = allShards.filter(s => !s.deletedAt);
+
       try {
-        const serialized = JSON.stringify(shardsToSave);
-        localStorage.setItem(STORAGE_KEY, serialized);
-        // Clear any previous storage error on success
+        localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(v2Payload));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacyShards));
         if (storageError) setStorageError(null);
       } catch (e) {
-        // Handle QuotaExceededError
         if (e instanceof DOMException && (
           e.name === 'QuotaExceededError' ||
           e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
@@ -126,9 +292,9 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
         }
       }
     }, 500);
-    
+
     return () => clearTimeout(timer);
-  }, [allShards, isHydrated, storageError]);
+  }, [allShards, undoTransactions, isHydrated, storageError]);
 
   // Persist stats with safeguards
   useEffect(() => {
@@ -141,39 +307,39 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     }
   }, [sessionStats, isHydrated]);
 
-  // Prune soft-deleted shards after TTL
+  // Expire undo transactions using nearest-expiry scheduling
   useEffect(() => {
-    const hasDeletedShards = allShards.some(s => s.deletedAt);
-    
-    if (!hasDeletedShards) {
-      if (pruneTimerRef.current) {
-        clearInterval(pruneTimerRef.current);
-        pruneTimerRef.current = null;
-      }
-      return;
+    if (!isHydrated) return;
+
+    const now = Date.now();
+    expireDueTransactions(now);
+
+    const nearestExpiry = undoTransactions
+      .filter(tx => tx.status === 'open')
+      .reduce<number | null>((nearest, tx) => {
+        if (nearest === null) return tx.expiresAt;
+        return Math.min(nearest, tx.expiresAt);
+      }, null);
+
+    if (expiryTimerRef.current) {
+      clearTimeout(expiryTimerRef.current);
+      expiryTimerRef.current = null;
     }
 
-    // Start prune timer if not already running
-    if (!pruneTimerRef.current) {
-      pruneTimerRef.current = setInterval(() => {
-        const now = Date.now();
-        setAllShards(prev => {
-          const pruned = prev.filter(s => 
-            !s.deletedAt || (now - s.deletedAt) < SOFT_DELETE_TTL
-          );
-          // Only update if something was pruned
-          return pruned.length !== prev.length ? pruned : prev;
-        });
-      }, 1000); // Check every second
+    if (nearestExpiry !== null) {
+      const delay = Math.max(0, nearestExpiry - now);
+      expiryTimerRef.current = setTimeout(() => {
+        expireDueTransactions(Date.now());
+      }, delay);
     }
 
     return () => {
-      if (pruneTimerRef.current) {
-        clearInterval(pruneTimerRef.current);
-        pruneTimerRef.current = null;
+      if (expiryTimerRef.current) {
+        clearTimeout(expiryTimerRef.current);
+        expiryTimerRef.current = null;
       }
     };
-  }, [allShards]);
+  }, [undoTransactions, isHydrated, expireDueTransactions]);
 
   // Update session stats with usage metadata
   const updateStats = useCallback((usageMetadata?: UsageMetadata) => {
@@ -227,6 +393,10 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     const trimmedContent = content.trim();
     if (!trimmedContent) return;
 
+    const ingestSeq = nextIngestSeqRef.current;
+    nextIngestSeqRef.current += 1;
+    const ingestedAt = Date.now();
+
     // Reset duplicate flag
     setDuplicateDetected(false);
 
@@ -252,8 +422,9 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
       id: uuidv4(),
       content: trimmedContent,
       contentHash,
+      ingestSeq,
       tokenCount,
-      timestamp: Date.now(),
+      timestamp: ingestedAt,
       status: 'pending',
     };
 
@@ -292,9 +463,24 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
 
   // Soft delete a shard (can be undone within TTL)
   const deleteShard = useCallback((id: string) => {
-    setAllShards(prev => 
-      prev.map(s => s.id === id ? { ...s, deletedAt: Date.now() } : s)
+    const now = Date.now();
+    const target = allShardsRef.current.find(s => s.id === id && !s.deletedAt);
+    if (!target) return;
+
+    const tx: UndoTransaction = {
+      id: uuidv4(),
+      kind: 'delete_one',
+      shardIds: [id],
+      createdAt: now,
+      expiresAt: now + SOFT_DELETE_TTL,
+      status: 'open',
+    };
+
+    setUndoTransactions(prev => [tx, ...prev]);
+    setAllShards(prev =>
+      prev.map(s => s.id === id ? { ...s, deletedAt: now, deletedTxId: tx.id } : s)
     );
+
     setSelectedIds(prev => {
       if (!prev.has(id)) return prev;
       const next = new Set(prev);
@@ -303,28 +489,74 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     });
   }, []);
 
-  // Undo the most recent soft delete
+  // Undo the most recent delete transaction
   const undoDelete = useCallback(() => {
+    const now = Date.now();
+    expireDueTransactions(now);
+
+    const latestOpenTx = [...undoTransactionsRef.current]
+      .filter(tx => tx.status === 'open' && tx.expiresAt > now)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+
+    if (!latestOpenTx) return;
+
+    const txShardIds = new Set(latestOpenTx.shardIds);
+
     setAllShards(prev => {
-      // Find the most recently deleted shard
-      const deletedShards = prev.filter(s => s.deletedAt);
-      if (deletedShards.length === 0) return prev;
-      
-      const mostRecent = deletedShards.reduce((a, b) => 
-        (a.deletedAt || 0) > (b.deletedAt || 0) ? a : b
+      const activeHashes = new Set(
+        prev
+          .filter(s => !s.deletedAt)
+          .map(s => s.contentHash)
       );
-      
-      return prev.map(s => 
-        s.id === mostRecent.id ? { ...s, deletedAt: undefined } : s
-      );
+
+      const next: Shard[] = [];
+
+      for (const shard of prev) {
+        if (!txShardIds.has(shard.id) || shard.deletedTxId !== latestOpenTx.id || !shard.deletedAt) {
+          next.push(shard);
+          continue;
+        }
+
+        if (activeHashes.has(shard.contentHash)) {
+          continue;
+        }
+
+        activeHashes.add(shard.contentHash);
+        next.push({
+          ...shard,
+          deletedAt: undefined,
+          deletedTxId: undefined,
+        });
+      }
+
+      return next;
     });
-  }, []);
+
+    setUndoTransactions(prev =>
+      prev.map(tx => tx.id === latestOpenTx.id ? { ...tx, status: 'undone' } : tx)
+    );
+  }, [expireDueTransactions]);
 
   // Clear all shards (soft delete all)
   const clearAll = useCallback(() => {
     const now = Date.now();
-    setAllShards(prev => 
-      prev.map(s => s.deletedAt ? s : { ...s, deletedAt: now })
+    const activeShardIds = allShardsRef.current
+      .filter(s => !s.deletedAt)
+      .map(s => s.id);
+    if (activeShardIds.length === 0) return;
+
+    const tx: UndoTransaction = {
+      id: uuidv4(),
+      kind: 'clear_all',
+      shardIds: activeShardIds,
+      createdAt: now,
+      expiresAt: now + SOFT_DELETE_TTL,
+      status: 'open',
+    };
+
+    setUndoTransactions(prev => [tx, ...prev]);
+    setAllShards(prev =>
+      prev.map(s => s.deletedAt ? s : { ...s, deletedAt: now, deletedTxId: tx.id })
     );
     setSelectedIds(new Set());
   }, []);
@@ -365,9 +597,35 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     return allShards.filter(s => !s.deletedAt && s.status === 'ready' && selectedIds.has(s.id)).length;
   }, [allShards, selectedIds]);
 
+  const orderShardsForCompilation = useCallback((shards: Shard[]) => {
+    return [...shards].sort((a, b) => {
+      if (a.ingestSeq !== b.ingestSeq) {
+        return a.ingestSeq - b.ingestSeq;
+      }
+      if (a.timestamp !== b.timestamp) {
+        return a.timestamp - b.timestamp;
+      }
+      return a.id.localeCompare(b.id);
+    });
+  }, []);
+
+  const getCompileShards = useCallback(() => {
+    let compileShards = allShards.filter(s => !s.deletedAt && s.status === 'ready' && s.metadata);
+    if (selectedIds.size > 0) {
+      compileShards = compileShards.filter(s => selectedIds.has(s.id));
+    }
+    return orderShardsForCompilation(compileShards);
+  }, [allShards, selectedIds, orderShardsForCompilation]);
+
+  const getSelectedReadyShards = useCallback(() => {
+    if (selectedIds.size === 0) return [];
+    const selected = allShards.filter(s => !s.deletedAt && s.status === 'ready' && selectedIds.has(s.id) && s.metadata);
+    return orderShardsForCompilation(selected);
+  }, [allShards, selectedIds, orderShardsForCompilation]);
+
   const getSelectedRawContent = useCallback(() => {
     if (selectedIds.size === 0) return { content: '', count: 0 };
-    const selected = allShards.filter(s => !s.deletedAt && s.status === 'ready' && selectedIds.has(s.id));
+    const selected = getSelectedReadyShards();
     const chunks = selected
       .map(s => s.content)
       .filter(text => text.trim().length > 0);
@@ -375,7 +633,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
       content: chunks.join('\n\n---\n\n'),
       count: chunks.length,
     };
-  }, [allShards, selectedIds]);
+  }, [selectedIds.size, getSelectedReadyShards]);
 
   // Retry indexing for a failed shard
   const retry = useCallback(async (id: string) => {
@@ -414,13 +672,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
   // Compile all shards to markdown with smart manifest generation
   // If selectedIds has items, compile ONLY selected shards; otherwise compile ALL ready shards
   const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
-    // Filter to active (non-deleted), ready shards
-    let activeShards = allShards.filter(s => !s.deletedAt && s.status === 'ready' && s.metadata);
-    
-    // If selection exists, filter to only selected shards
-    if (selectedIds.size > 0) {
-      activeShards = activeShards.filter(s => selectedIds.has(s.id));
-    }
+    const activeShards = getCompileShards();
     
     const fallbackManifest: CollectionManifest = {
       title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
@@ -493,7 +745,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     });
 
     return { markdown, manifest };
-  }, [allShards, apiKey, updateStats, selectedIds]);
+  }, [getCompileShards, apiKey, updateStats]);
 
   // Helper to detect code language from metadata
   const detectCodeLanguage = (domain: string, tags: string[]): string => {
@@ -518,9 +770,39 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
 
   // Active shards (filtered view for UI - excludes soft-deleted)
   const shards = allShards.filter(s => !s.deletedAt);
-  
-  // Check if there are recoverable (soft-deleted) shards
-  const hasRecoverableShards = allShards.some(s => s.deletedAt);
+
+  const latestOpenUndoTransaction = useMemo(() => {
+    const openTransactions = undoTransactions.filter(tx => tx.status === 'open');
+    if (openTransactions.length === 0) return null;
+
+    return openTransactions.reduce((latest, tx) => (
+      tx.createdAt > latest.createdAt ? tx : latest
+    ));
+  }, [undoTransactions]);
+
+  const undoState: UndoState = useMemo(() => {
+    if (!latestOpenUndoTransaction) {
+      return {
+        canUndo: false,
+        kind: null,
+        affectedCount: 0,
+        expiresAt: null,
+        msRemaining: 0,
+      };
+    }
+
+    const msRemaining = Math.max(0, latestOpenUndoTransaction.expiresAt - Date.now());
+    return {
+      canUndo: msRemaining > 0,
+      kind: latestOpenUndoTransaction.kind,
+      affectedCount: latestOpenUndoTransaction.shardIds.length,
+      expiresAt: latestOpenUndoTransaction.expiresAt,
+      msRemaining,
+    };
+  }, [latestOpenUndoTransaction]);
+
+  // Backward-compatible boolean for existing UI branches
+  const hasRecoverableShards = undoState.canUndo;
 
   // Computed values (based on active shards only)
   const totalShards = shards.length;
@@ -549,6 +831,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
     storageError,
     duplicateDetected,
     hasRecoverableShards,
+    undoState,
     
     // Domain taxonomy
     uniqueDomains,

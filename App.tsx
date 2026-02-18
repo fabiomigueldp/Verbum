@@ -823,6 +823,7 @@ const App: React.FC = () => {
             onResetStats={collectio.resetStats}
             hasRecoverableShards={collectio.hasRecoverableShards}
             onUndoDelete={collectio.undoDelete}
+            undoState={collectio.undoState}
             storageError={collectio.storageError}
             duplicateDetected={collectio.duplicateDetected}
             selectedCount={collectio.selectedIds.size}

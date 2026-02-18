@@ -5,7 +5,7 @@ import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
 import { formatNanoDollars } from '../../utils/pricing';
 import { estimateReadTime } from '../../services/indexerService';
-import { CollectionManifest } from '../../hooks/useCollectio';
+import { CollectionManifest, UndoState } from '../../hooks/useCollectio';
 
 // ============================================================================
 // COMPILER HUD COMPONENT - "Liquid" Design
@@ -33,6 +33,7 @@ interface CompilerHUDProps {
   onResetStats: () => void;
   hasRecoverableShards?: boolean;
   onUndoDelete?: () => void;
+  undoState?: UndoState;
   storageError?: string | null;
   duplicateDetected?: boolean;
   selectedCount?: number;
@@ -189,6 +190,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   onResetStats,
   hasRecoverableShards = false,
   onUndoDelete,
+  undoState,
   storageError,
   duplicateDetected = false,
   selectedCount = 0,
@@ -206,6 +208,10 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   const hasShards = totalShards > 0;
   const hasReadyShards = readyShards > 0;
   const hasSelectedReady = selectedReadyCount > 0;
+  const effectiveHasUndo = (undoState ? undoState.canUndo : hasRecoverableShards) && !!onUndoDelete;
+  const undoCount = undoState?.affectedCount ?? 0;
+  const undoLabel = undoState?.kind === 'clear_all' ? 'Undo Clear' : 'Undo Delete';
+  const undoTitle = undoCount > 0 ? `${undoLabel} (${undoCount})` : undoLabel;
 
   // Copy text to clipboard with fallback
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -373,30 +379,32 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     <RotateCcw size={14} />
                   </LiquidButton>
 
-                  {/* Undo Delete - Slides in */}
-                  <div 
-                    className="grid transition-all duration-400 transform-gpu"
-                    style={{ 
-                      gridTemplateRows: hasRecoverableShards && onUndoDelete ? '1fr' : '0fr',
-                      gridTemplateColumns: hasRecoverableShards && onUndoDelete ? '1fr' : '0fr',
-                      transitionTimingFunction: PREMIUM_EASE,
-                    }}
-                  >
-                    <div className="overflow-hidden">
-                      <button
-                        onClick={onUndoDelete}
-                        className="
-                          p-2 rounded-lg
-                          text-amber-500/80 hover:text-amber-400
-                          bg-amber-500/10 hover:bg-amber-500/20
-                          transition-all duration-300
-                        "
-                        style={{ transitionTimingFunction: PREMIUM_EASE }}
-                        title="Undo Delete (5s)"
-                      >
-                        <Undo2 size={14} />
-                      </button>
-                    </div>
+                  {/* Undo Delete - Reserved slot, no layout shift */}
+                  <div className="relative w-8 h-8 shrink-0">
+                    <button
+                      onClick={onUndoDelete}
+                      disabled={!effectiveHasUndo}
+                      aria-hidden={!effectiveHasUndo}
+                      tabIndex={effectiveHasUndo ? 0 : -1}
+                      className={
+                        `
+                          absolute inset-0
+                          flex items-center justify-center
+                          rounded-lg
+                          border transform-gpu
+                          transition-[opacity,transform,background-color,color,border-color,box-shadow]
+                          duration-300 motion-reduce:transition-none
+                          ${effectiveHasUndo
+                            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/16 hover:border-amber-500/30 hover:shadow-[0_0_16px_rgba(245,158,11,0.22)] active:scale-[0.97]'
+                            : 'opacity-0 translate-y-1 scale-[0.98] pointer-events-none text-neutral-600 bg-transparent border-transparent'
+                          }
+                        `
+                      }
+                      style={{ transitionTimingFunction: PREMIUM_EASE }}
+                      title={undoTitle}
+                    >
+                      <Undo2 size={14} />
+                    </button>
                   </div>
 
                   <LiquidButton
