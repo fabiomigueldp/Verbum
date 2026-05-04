@@ -132,19 +132,13 @@ export interface ContextMessage {
 // AI CONFIGURATION
 // ============================================================================
 
-export type ProviderOption = 'gemini' | 'xai';
+/** Provider ID — extensible registry string. Formerly: 'gemini' | 'xai' */
+export type ProviderOption = string;
 
 export const XAI_MODEL_ID = 'grok-4-1-fast-non-reasoning' as const;
 
-export type ModelOption =
-  | 'gemini-2.5-flash'
-  | 'gemini-2.5-flash-lite'
-  | 'gemini-2.5-pro'
-  | 'gemini-2.5-flash-lite-preview-09-2025'
-  | 'gemini-2.0-flash-lite'
-  | 'gemini-3-flash-preview'
-  | typeof XAI_MODEL_ID
-  | string;
+/** Extensible model option. Specific IDs are validated at runtime via the provider registry. */
+export type ModelOption = string;
 
 export interface AiRuntimeConfig {
   provider?: ProviderOption;

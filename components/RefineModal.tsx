@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe } from 'lucide-react';
 import { GlassCard } from './GlassCard';
+import { ProviderSelector } from './ProviderSelector';
+import { ModelSelector } from './ModelSelector';
+import { getProvider, getModelLabel, getAllProviders } from '../services/providers';
+import type { ProviderConfig } from '../services/providers';
 import { ToneOption, CustomTone, UsageSession, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
 import { CustomToneModal } from './CustomToneModal';
 import { TokenTelemetry } from './TokenTelemetry';
@@ -14,19 +18,16 @@ interface RefineModalProps {
   onToggleContext: (enabled: boolean) => void;
   contextDepth: number;
   onUpdateContextDepth: (depth: number) => void;
-  provider: 'gemini' | 'xai';
-  onProviderChange: (provider: 'gemini' | 'xai') => void;
+  provider: string;
+  onProviderChange: (provider: string) => void;
   model: string;
-  geminiApiKey: string;
-  xaiApiKey: string;
+  apiKeys: Record<string, string>;
   resolvedApiKey: string;
   isEnvKey?: boolean;
   onModelChange: (model: string) => void;
-  onGeminiApiKeyChange: (key: string) => void;
-  onXaiApiKeyChange: (key: string) => void;
+  onApiKeyChange: (providerId: string, key: string) => void;
   sessionStats: UsageSession;
   onResetSessionStats: () => void;
-  // Language Matrix
   anchorLanguage: Exclude<LanguageCode, 'unknown'>;
   targetLanguage: Exclude<LanguageCode, 'unknown'>;
   onAnchorLanguageChange: (lang: Exclude<LanguageCode, 'unknown'>) => void;
@@ -35,6 +36,7 @@ interface RefineModalProps {
   onAddCustomTone: (tone: CustomTone) => void;
   onDeleteCustomTone: (id: string) => void;
   onClose: () => void;
+  initialFocus?: 'engine' | null;
 }
 
 const STANDARD_TONES: { id: string; label: string; desc: string }[] = [
@@ -42,51 +44,6 @@ const STANDARD_TONES: { id: string; label: string; desc: string }[] = [
   { id: 'executive', label: 'Executive', desc: 'Sophisticated, authoritative, and professional.' },
   { id: 'concise', label: 'Concise', desc: 'Direct, short, and to the point. Removes fluff.' },
   { id: 'softer', label: 'Softer Tone', desc: 'Diplomatic, empathetic, and polite.' },
-];
-
-const MODEL_OPTIONS: { id: string; label: string; desc: string; badge?: string; badgeStyle?: string }[] = [
-  {
-    id: 'gemini-2.5-flash-lite',
-    label: 'Gemini 2.5 Flash Lite',
-    desc: 'Maximum speed. Instant latency.',
-    badge: 'Fastest',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
-  {
-    id: 'gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash',
-    desc: 'Balanced performance.',
-    badge: 'Balanced',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
-  {
-    id: 'gemini-2.5-pro',
-    label: 'Gemini 2.5 Pro',
-    desc: 'Complex reasoning.',
-    badge: 'Pro',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
-  {
-    id: 'gemini-2.5-flash-lite-preview-09-2025',
-    label: 'Gemini 2.5 Flash Lite Preview',
-    desc: 'Experimental speed build.',
-    badge: 'Preview',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
-  {
-    id: 'gemini-2.0-flash-lite',
-    label: 'Gemini 2.0 Flash Lite',
-    desc: 'Stable low-latency option.',
-    badge: 'Lite',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
-  {
-    id: 'gemini-3-flash-preview',
-    label: 'Gemini 3 Flash Preview',
-    desc: 'Next-gen speed preview.',
-    badge: 'Preview',
-    badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10'
-  },
 ];
 
 export const RefineModal = ({
@@ -101,13 +58,11 @@ export const RefineModal = ({
   provider,
   onProviderChange,
   model,
-  geminiApiKey,
-  xaiApiKey,
+  apiKeys,
   resolvedApiKey,
   isEnvKey,
   onModelChange,
-  onGeminiApiKeyChange,
-  onXaiApiKeyChange,
+  onApiKeyChange,
   sessionStats,
   onResetSessionStats,
   anchorLanguage,
@@ -117,33 +72,33 @@ export const RefineModal = ({
   onSelect,
   onAddCustomTone,
   onDeleteCustomTone,
-  onClose
+  onClose,
+  initialFocus,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [showModels, setShowModels] = useState(false);
+  const [showEngine, setShowEngine] = useState(initialFocus === 'engine');
   const [showLanguages, setShowLanguages] = useState(false);
+  const [showTelemetry, setShowTelemetry] = useState(false);
 
-  // Local state for slider to prevent parent re-renders on every drag event
   const [localDepth, setLocalDepth] = useState(contextDepth);
 
   useEffect(() => {
     setLocalDepth(contextDepth);
   }, [contextDepth]);
 
+  const providerConfig = getProvider(provider);
+  const providerName = providerConfig?.name || provider;
+  const modelLabel = getModelLabel(provider, model);
   const hasResolvedApiKey = Boolean(resolvedApiKey);
-  const apiKeyInputRef = useRef<HTMLInputElement>(null);
-  const currentModelLabel = MODEL_OPTIONS.find((m) => m.id === model)?.label || 'Model';
-  const isGemini = provider === 'gemini';
-  const modelLabel = isGemini ? currentModelLabel : 'Grok 4.1 Fast (Non-Reasoning)';
-  const apiKeyValue = isGemini ? geminiApiKey : xaiApiKey;
+  const apiKeyValue = apiKeys[provider] || '';
 
+  // Auto-expand engine if opened from gate
   useEffect(() => {
-    if (!hasResolvedApiKey && showModels) {
-      const timer = setTimeout(() => apiKeyInputRef.current?.focus(), 200);
-      return () => clearTimeout(timer);
+    if (initialFocus === 'engine') {
+      setShowEngine(true);
     }
-  }, [hasResolvedApiKey, showModels, provider]);
+  }, [initialFocus]);
 
   if (isCreating) {
     return (
@@ -166,7 +121,6 @@ export const RefineModal = ({
         onClick={onClose}
       />
 
-      {/* Modal Content - Fixed height to prevent jumping */}
       <GlassCard className="w-full max-w-md max-h-[85vh] relative animate-slide-up bg-neutral-900/90" hoverEffect={false}>
         <div className="p-6 flex flex-col min-h-0 max-h-[85vh]">
           <div className="flex justify-between items-center mb-6 shrink-0">
@@ -181,9 +135,152 @@ export const RefineModal = ({
             </button>
           </div>
 
-          <div className="overflow-y-auto pr-2 -mr-2 space-y-6 custom-scrollbar flex-1 min-h-0">
+          <div className="overflow-y-auto pr-2 -mr-2 space-y-5 custom-scrollbar flex-1 min-h-0">
 
-            {/* Language Matrix - Smart Pivot Configuration */}
+            {/* ================================================================
+                ENGINE — Provider + Model + API Key
+                ================================================================ */}
+            <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowEngine(!showEngine)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-neutral-900 text-white border border-white/10">
+                    <Boxes size={16} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-white block">Model</span>
+                    <span className="text-xs text-neutral-500 font-light">
+                      {providerName} / {modelLabel}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-neutral-500">
+                  <span className="text-[10px] uppercase tracking-[0.2em]">Expand</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform ${showEngine ? 'rotate-180 text-white' : ''}`}
+                  />
+                </div>
+              </button>
+
+              {showEngine && (
+                <div className="px-4 pt-2 pb-5 space-y-5 animate-fade-in border-t border-white/5">
+                  {/* Provider */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">
+                        Provider
+                      </span>
+                      <span className="text-[10px] text-neutral-600 font-light">
+                        Applies to Translation + Collectio
+                      </span>
+                    </div>
+                    <ProviderSelector value={provider} onChange={onProviderChange} />
+                  </div>
+
+                  {/* Model */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold block">
+                      Model
+                    </span>
+                    {providerConfig && providerConfig.models.length > 0 ? (
+                      <ModelSelector
+                        models={providerConfig.models}
+                        value={model}
+                        onChange={onModelChange}
+                      />
+                    ) : (
+                      <div className="px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+                        <span className="text-[12px] text-neutral-400">No models available</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* API Key */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">
+                        API Key
+                      </span>
+                      <span className={`
+                        text-[9px] uppercase tracking-[0.15em] font-bold
+                        ${hasResolvedApiKey ? 'text-neutral-300' : 'text-neutral-600'}
+                      `}>
+                        {hasResolvedApiKey ? 'Active' : 'Missing'}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKeyValue}
+                        onChange={(e) => onApiKeyChange(provider, e.target.value)}
+                        placeholder={providerConfig?.keyPlaceholder || 'API key'}
+                        className={`
+                          w-full bg-neutral-950/60 border rounded-lg px-3 py-3
+                          text-sm text-white placeholder-neutral-600
+                          focus:outline-none focus:border-white/30
+                          transition-colors pr-10
+                          ${hasResolvedApiKey ? 'border-white/10' : 'border-white/20 shadow-[0_0_18px_rgba(255,255,255,0.06)]'}
+                        `}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors"
+                      >
+                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] text-neutral-600 font-light">
+                        {isEnvKey ? 'Loaded from environment' : 'Stored locally'}
+                      </span>
+                      {providerConfig?.keyUrl && (
+                        <a
+                          href={providerConfig.keyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-neutral-400 hover:text-white transition-colors flex items-center gap-1"
+                        >
+                          Get key
+                          <span className="text-neutral-600">→</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Telemetry — Collapsed by default */}
+                  <div className="pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => setShowTelemetry(!showTelemetry)}
+                      className="w-full flex items-center justify-between py-2 text-left"
+                    >
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">
+                        Telemetry
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-neutral-600 transition-transform duration-300 ${showTelemetry ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showTelemetry && (
+                      <div className="animate-fade-in">
+                        <TokenTelemetry stats={sessionStats} onReset={onResetSessionStats} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ================================================================
+                LANGUAGE MATRIX
+                ================================================================ */}
             <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
               <button
                 type="button"
@@ -202,7 +299,7 @@ export const RefineModal = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-neutral-500">
-                  <span className="text-[10px] uppercase tracking-[0.2em]">Configure</span>
+                  <span className="text-[10px] uppercase tracking-[0.2em]">Expand</span>
                   <ChevronDown
                     size={16}
                     className={`transition-transform ${showLanguages ? 'rotate-180 text-white' : ''}`}
@@ -243,7 +340,6 @@ export const RefineModal = ({
                           `}
                         >
                           <span className="text-[10px] font-medium tracking-wide">{lang.code.toUpperCase()}</span>
-                          {/* RTL indicator */}
                           {lang.dir === 'rtl' && (
                             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/30" />
                           )}
@@ -283,7 +379,6 @@ export const RefineModal = ({
                           `}
                         >
                           <span className="text-[10px] font-medium tracking-wide">{lang.code.toUpperCase()}</span>
-                          {/* RTL indicator */}
                           {lang.dir === 'rtl' && (
                             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/30" />
                           )}
@@ -292,207 +387,11 @@ export const RefineModal = ({
                     </div>
                   </div>
 
-                  {/* Smart Pivot Explanation */}
                   <div className="pt-3 border-t border-white/5">
                     <p className="text-[10px] text-neutral-600 font-light leading-relaxed">
                       Smart Pivot: Text in {anchorLanguage.toUpperCase()} translates to {targetLanguage.toUpperCase()}, 
                       and vice versa. Any other language translates to {anchorLanguage.toUpperCase()}.
                     </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Model & Access */}
-            <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowModels(!showModels)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-neutral-900 text-white border border-white/10">
-                    <Boxes size={16} />
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-white block">Model</span>
-                    <span className="text-xs text-neutral-500 font-light">Current: {modelLabel}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-neutral-500">
-                  <span className="text-[10px] uppercase tracking-[0.2em]">Expand</span>
-                  <ChevronDown
-                    size={16}
-                    className={`transition-transform ${showModels ? 'rotate-180 text-white' : ''}`}
-                  />
-                </div>
-              </button>
-
-              {showModels && (
-                <div className="px-4 pt-4 pb-4 space-y-4 animate-fade-in border-t border-white/5">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Provider</span>
-                      <span className="text-[10px] text-neutral-600 font-light">Applies to Translation + Collectio</span>
-                    </div>
-                    <div className="relative inline-flex items-center rounded-full border border-white/10 bg-neutral-950/60 p-1">
-                      <span
-                        className={`
-                          absolute top-1 bottom-1 w-[50%] rounded-full
-                          bg-white/10 border border-white/20
-                          transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
-                          ${provider === 'xai' ? 'translate-x-full' : 'translate-x-0'}
-                        `}
-                      />
-                      {([
-                        { id: 'gemini', label: 'Gemini' },
-                        { id: 'xai', label: 'Grok' },
-                      ] as const).map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => onProviderChange(option.id)}
-                          className={`
-                            relative z-10 px-4 py-2 rounded-full
-                            text-[11px] uppercase tracking-[0.18em]
-                            transition-colors duration-300
-                            ${provider === option.id
-                              ? 'text-white'
-                              : 'text-neutral-500 hover:text-neutral-300'}
-                          `}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                    <div className={`transition-opacity duration-300 ${isGemini ? 'opacity-100' : 'opacity-90'}`}>
-                  {isGemini ? (
-                    <div className="space-y-2">
-                      {MODEL_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => onModelChange(option.id)}
-                          className={`
-                            w-full text-left p-3 rounded-lg border transition-all duration-300 group relative
-                            ${model === option.id
-                              ? 'bg-white/10 border-white/15 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
-                              : 'bg-transparent border-white/5 hover:border-white/10 hover:bg-white/5'}
-                          `}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium text-white">{option.label}</span>
-                              {option.badge && (
-                                <span className={`text-[10px] uppercase px-2 py-1 rounded-full border tracking-[0.15em] ${option.badgeStyle}`}>
-                                  {option.badge}
-                                </span>
-                              )}
-                            </div>
-                            {model === option.id ? (
-                              <Check size={14} className="text-white" />
-                            ) : (
-                              <span className="text-[10px] text-neutral-500 uppercase tracking-[0.15em]">Use</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                            {option.desc}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 rounded-lg border border-white/10 bg-white/5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-sm font-medium text-white block">Grok 4.1 Fast (Non-Reasoning)</span>
-                          <span className="text-xs text-neutral-500 font-light">Fixed model for xAI</span>
-                        </div>
-                        <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-500">Fixed</span>
-                      </div>
-                    </div>
-                  )}
-                  </div>
-
-                  <div className="pt-4 border-t border-white/5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-full bg-neutral-800 text-neutral-200 border border-white/10">
-                          <KeyRound size={16} />
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium text-white block">API Key</span>
-                          <span className="text-xs text-neutral-500 font-light">
-                            {isEnvKey ? 'Loaded from Environment Variables' : 'Stored locally on this device'}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] uppercase tracking-[0.2em] font-bold ${hasResolvedApiKey ? 'text-neutral-200' : 'text-neutral-500'}`}>
-                        {hasResolvedApiKey ? 'Active' : 'Missing'}
-                      </span>
-                    </div>
-
-                    <div className="relative">
-                      <input
-                        ref={apiKeyInputRef}
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKeyValue}
-                        onChange={(e) => {
-                          if (isGemini) {
-                            onGeminiApiKeyChange(e.target.value);
-                          } else {
-                            onXaiApiKeyChange(e.target.value);
-                          }
-                        }}
-                        placeholder={isGemini ? "Gemini API key" : "xAI API key"}
-                        className={`w-full bg-neutral-950/60 border rounded-lg px-3 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-white/30 transition-colors pr-10 ${hasResolvedApiKey ? 'border-white/10' : 'border-white/20 shadow-[0_0_18px_rgba(255,255,255,0.06)]'}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors"
-                        title={showApiKey ? "Hide API key" : "Show API key"}
-                      >
-                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-
-                    {!hasResolvedApiKey && (
-                      <p className="text-[11px] text-neutral-500 leading-relaxed flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-white/50 animate-pulse" />
-                        {isGemini ? (
-                          <>
-                            Obtain a Gemini key at{" "}
-                            <a
-                              href="https://aistudio.google.com/api-keys"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-white hover:underline"
-                            >
-                              aistudio.google.com/api-keys
-                            </a>.
-                          </>
-                        ) : (
-                          <>
-                            Obtain an xAI key at{" "}
-                          <a
-                            href="https://console.x.ai/team/default/api-keys"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-white hover:underline"
-                          >
-                            console.x.ai/api-keys
-                          </a>.
-                          </>
-                        )}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-neutral-600 font-light">
-                      Keys typed here are stored only in your browser (localStorage). If empty, we fall back to your environment key when available.
-                    </p>
-
-                    {/* Token Telemetry */}
-                    <TokenTelemetry stats={sessionStats} onReset={onResetSessionStats} />
                   </div>
                 </div>
               )}

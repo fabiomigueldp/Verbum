@@ -6,14 +6,21 @@ import {
   RefinementResponse,
   ProviderOption,
 } from "../types";
-import { translateText as geminiTranslateText, refineText as geminiRefineText, validateApiKey as geminiValidateApiKey } from "./geminiService";
-import { indexText as geminiIndexText, generateCollectionManifest as geminiGenerateCollectionManifest } from "./indexerService";
-import * as xaiService from "./xaiService";
+import { getProvider } from "./providers";
 
 export type Provider = ProviderOption;
 
 const resolveProvider = (config?: AiRuntimeConfig): Provider => {
-  return (config?.provider || 'gemini') as Provider;
+  return config?.provider || 'gemini';
+};
+
+const getService = (config?: AiRuntimeConfig) => {
+  const providerId = resolveProvider(config);
+  const provider = getProvider(providerId);
+  if (!provider) {
+    throw new Error(`Unknown provider: ${providerId}`);
+  }
+  return provider.services;
 };
 
 export const translateText = async (
@@ -23,11 +30,7 @@ export const translateText = async (
   contextHistory?: ContextMessage[],
   config?: AiRuntimeConfig
 ): Promise<TranslationResponse> => {
-  const provider = resolveProvider(config);
-  if (provider === 'xai') {
-    return xaiService.translateText(text, langConfig, refinementInstruction, contextHistory, config);
-  }
-  return geminiTranslateText(text, langConfig, refinementInstruction, contextHistory, config);
+  return getService(config).translateText(text, langConfig, refinementInstruction, contextHistory, config);
 };
 
 export const refineText = async (
@@ -35,11 +38,7 @@ export const refineText = async (
   instruction: string,
   config?: AiRuntimeConfig
 ): Promise<RefinementResponse> => {
-  const provider = resolveProvider(config);
-  if (provider === 'xai') {
-    return xaiService.refineText(text, instruction, config);
-  }
-  return geminiRefineText(text, instruction, config);
+  return getService(config).refineText(text, instruction, config);
 };
 
 export const indexText = async (
@@ -48,10 +47,9 @@ export const indexText = async (
   apiKey?: string,
   existingDomains?: string[]
 ) => {
-  if (provider === 'xai') {
-    return xaiService.indexText(text, apiKey, existingDomains);
-  }
-  return geminiIndexText(text, apiKey, existingDomains);
+  const p = getProvider(provider);
+  if (!p) throw new Error(`Unknown provider: ${provider}`);
+  return p.services.indexText(text, apiKey, existingDomains);
 };
 
 export const generateCollectionManifest = async (
@@ -59,18 +57,16 @@ export const generateCollectionManifest = async (
   shards: { title: string; domain: string; tags: string[]; excerpt: string }[],
   apiKey?: string
 ) => {
-  if (provider === 'xai') {
-    return xaiService.generateCollectionManifest(shards, apiKey);
-  }
-  return geminiGenerateCollectionManifest(shards, apiKey);
+  const p = getProvider(provider);
+  if (!p) throw new Error(`Unknown provider: ${provider}`);
+  return p.services.generateCollectionManifest(shards, apiKey);
 };
 
 export const validateApiKey = async (
   provider: Provider,
   apiKey: string
 ): Promise<boolean> => {
-  if (provider === 'xai') {
-    return xaiService.validateApiKey(apiKey);
-  }
-  return geminiValidateApiKey(apiKey);
+  const p = getProvider(provider);
+  if (!p) throw new Error(`Unknown provider: ${provider}`);
+  return p.services.validateApiKey(apiKey);
 };

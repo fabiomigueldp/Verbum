@@ -55,7 +55,7 @@ interface ComposerProps {
   isListening?: boolean;
   isSpeechSupported?: boolean;
   hasApiKey?: boolean;
-  provider?: 'gemini' | 'xai';
+  provider?: string;
   
   // Diff Mode
   originalInput?: string | null;
