@@ -14,7 +14,7 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
-import { OPENAI_REASONING_DISABLED } from '../core/reasoning';
+import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
 // OPENAI ADAPTER
@@ -22,10 +22,10 @@ import { OPENAI_REASONING_DISABLED } from '../core/reasoning';
 // ============================================================================
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
-const DEFAULT_MODEL = 'gpt-5-nano';
+const DEFAULT_MODEL = 'gpt-5.4-nano';
 
 const resolveApiKey = (apiKey?: string): string => {
-  const key = apiKey?.trim() || process.env.OPENAI_API_KEY;
+  const key = apiKey?.trim();
   if (!key) throw new Error('Missing API key for OpenAI.');
   return key;
 };
@@ -49,6 +49,9 @@ interface OpenAIPayload {
     };
   };
   max_output_tokens?: number;
+  reasoning?: {
+    effort: 'none' | 'low';
+  };
 }
 
 const callOpenAI = async (
@@ -88,8 +91,9 @@ export class OpenAIAdapter implements ProviderAdapter {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
 
+    const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
-      model: resolveModel(config?.model),
+      model,
       input: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildSafetyEnvelope(text) },
@@ -107,7 +111,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      ...OPENAI_REASONING_DISABLED,
+      ...getReasoningConfig('openai', model),
       max_output_tokens: 2048,
     };
 
@@ -119,8 +123,9 @@ export class OpenAIAdapter implements ProviderAdapter {
     instruction: string,
     config?: AiRuntimeConfig
   ): Promise<NormalizedResponse> {
+    const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
-      model: resolveModel(config?.model),
+      model,
       input: [
         { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
@@ -138,7 +143,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      ...OPENAI_REASONING_DISABLED,
+      ...getReasoningConfig('openai', model),
       max_output_tokens: 2048,
     };
 
@@ -150,8 +155,9 @@ export class OpenAIAdapter implements ProviderAdapter {
     existingDomains?: string[],
     config?: AiRuntimeConfig
   ): Promise<IndexerResponse> {
+    const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
-      model: resolveModel(config?.model),
+      model,
       input: [
         { role: 'system', content: buildIndexerInstruction(existingDomains) },
         { role: 'user', content: buildIndexerUserPrompt(text) },
@@ -169,7 +175,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      ...OPENAI_REASONING_DISABLED,
+      ...getReasoningConfig('openai', model),
       max_output_tokens: 2048,
     };
 
@@ -183,6 +189,7 @@ export class OpenAIAdapter implements ProviderAdapter {
         tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
       },
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   }
 
@@ -202,8 +209,9 @@ export class OpenAIAdapter implements ProviderAdapter {
     }
 
     try {
+      const model = resolveModel(config?.model);
       const payload: OpenAIPayload = {
-        model: resolveModel(config?.model),
+        model,
         input: [
           { role: 'system', content: MANIFEST_SYSTEM_INSTRUCTION },
           { role: 'user', content: buildManifestUserPrompt(shards) },
@@ -221,7 +229,7 @@ export class OpenAIAdapter implements ProviderAdapter {
             },
           },
         },
-        ...OPENAI_REASONING_DISABLED,
+        ...getReasoningConfig('openai', model),
         max_output_tokens: 2048,
       };
 
@@ -238,6 +246,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
         },
         usageMetadata: result.usage,
+        actualCostNano: result.actualCostNano,
       };
     } catch (error) {
       console.error('Manifest generation error:', error);
@@ -248,6 +257,17 @@ export class OpenAIAdapter implements ProviderAdapter {
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
       const response = await fetch(`${OPENAI_API_BASE}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async validateModel(apiKey: string, model: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${OPENAI_API_BASE}/models/${encodeURIComponent(resolveModel(model))}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       return response.ok;

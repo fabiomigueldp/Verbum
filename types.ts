@@ -81,6 +81,8 @@ export interface UsageMetadata {
   promptTokens: number;
   candidatesTokens: number;
   totalTokens: number;
+  cachedPromptTokens?: number;
+  reasoningTokens?: number;
 }
 
 export interface TranslationResponse {
@@ -90,6 +92,7 @@ export interface TranslationResponse {
   /** The language the text was translated into */
   targetLanguageUsed: Exclude<LanguageCode, 'unknown'>;
   usageMetadata?: UsageMetadata;
+  actualCostNano?: string;
 }
 
 // ============================================================================
@@ -109,6 +112,7 @@ export interface RefinementResponse {
   changes: string;
   detectedLanguage?: LanguageCode;
   usageMetadata?: UsageMetadata;
+  actualCostNano?: string;
 }
 
 // ============================================================================
@@ -162,6 +166,7 @@ export interface ShardMetadata {
 export interface IndexerResponse {
   metadata: ShardMetadata;
   usageMetadata?: UsageMetadata;
+  actualCostNano?: string;
 }
 
 export type CollectionType = 'codebase' | 'document' | 'dataset' | 'mixed';
@@ -176,6 +181,7 @@ export interface CollectionManifest {
 export interface ManifestResponse {
   manifest: CollectionManifest;
   usageMetadata?: UsageMetadata;
+  actualCostNano?: string;
 }
 
 export interface ShardSummary {
@@ -204,10 +210,13 @@ export interface RequestLog {
   errorType?: TelemetryErrorType;
   errorMessage?: string;
   inputTokens: number;
+  cachedInputTokens?: number;
   outputTokens: number;
+  reasoningTokens?: number;
   totalTokens: number;
   estimatedCostNano: string;
   actualCostNano?: string;
+  costSource?: 'estimated' | 'provider_actual';
   inputLength: number;
   outputLength?: number;
   inputPreview: string;

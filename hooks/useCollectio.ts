@@ -11,6 +11,16 @@ import { indexText, generateCollectionManifest } from '../services/aiRouter';
 import { calculateCostNano } from '../utils/pricing';
 import { estimateTokens } from '../utils/tokens';
 import { computeHash } from '../utils/cryptoUtils';
+import {
+  expireTransactions,
+  hydrateCollectioState,
+  persistCollectioState,
+  persistCollectioStats,
+} from './collectio/storage';
+import {
+  buildCollectionMarkdown,
+  buildFallbackManifest,
+} from './collectio/compiler';
 
 // ============================================================================
 // COLLECTIO STATE MANAGEMENT
@@ -55,101 +65,7 @@ export interface UndoState {
   msRemaining: number;
 }
 
-interface CollectioState {
-  shards: Shard[];
-  sessionStats: UsageSession;
-}
-
-const STORAGE_KEY = 'verbum_collectio';
-const STORAGE_KEY_V2 = 'verbum_collectio_v2';
-const STATS_KEY = 'verbum_collectio_stats';
 const SOFT_DELETE_TTL = 5000; // 5 seconds before permanent deletion
-
-interface PersistedCollectioV2 {
-  version: 2;
-  shards: Shard[];
-  undoTransactions: UndoTransaction[];
-  nextIngestSeq: number;
-}
-
-const normalizeShard = (shard: Shard): Shard => ({
-  ...shard,
-  status: shard.status === 'indexing' ? 'pending' : shard.status,
-  contentHash: shard.contentHash || `legacy-${shard.id}`,
-});
-
-const expireTransactions = (
-  shards: Shard[],
-  transactions: UndoTransaction[],
-  now: number
-) => {
-  const expiredTxIds = new Set(
-    transactions
-      .filter(tx => tx.status === 'open' && tx.expiresAt <= now)
-      .map(tx => tx.id)
-  );
-
-  if (expiredTxIds.size === 0) {
-    return { shards, transactions };
-  }
-
-  const expiredShardIds = new Set<string>();
-  for (const tx of transactions) {
-    if (expiredTxIds.has(tx.id)) {
-      for (const shardId of tx.shardIds) {
-        expiredShardIds.add(shardId);
-      }
-    }
-  }
-
-  const nextShards = shards.filter(shard => {
-    if (!shard.deletedAt) return true;
-    if (!shard.deletedTxId) return false;
-    return !expiredShardIds.has(shard.id);
-  });
-
-  const nextTransactions = transactions.map(tx => (
-    expiredTxIds.has(tx.id) ? { ...tx, status: 'expired' as const } : tx
-  ));
-
-  return { shards: nextShards, transactions: nextTransactions };
-};
-
-const isUndoTransaction = (value: unknown): value is UndoTransaction => {
-  if (!value || typeof value !== 'object') return false;
-  const tx = value as Partial<UndoTransaction>;
-  return (
-    typeof tx.id === 'string' &&
-    (tx.kind === 'delete_one' || tx.kind === 'clear_all') &&
-    Array.isArray(tx.shardIds) &&
-    typeof tx.createdAt === 'number' &&
-    typeof tx.expiresAt === 'number' &&
-    (tx.status === 'open' || tx.status === 'undone' || tx.status === 'expired')
-  );
-};
-
-const inferAndNormalizeShards = (parsedShards: Shard[]): Shard[] => {
-  let maxIngestSeq = 0;
-  for (const shard of parsedShards) {
-    if (typeof shard.ingestSeq === 'number' && Number.isFinite(shard.ingestSeq)) {
-      maxIngestSeq = Math.max(maxIngestSeq, shard.ingestSeq);
-    }
-  }
-
-  let inferredIngestSeq = maxIngestSeq + parsedShards.length;
-
-  return parsedShards.map((rawShard: Shard) => {
-    const hasValidIngestSeq = typeof rawShard.ingestSeq === 'number' && Number.isFinite(rawShard.ingestSeq);
-    if (!hasValidIngestSeq) {
-      inferredIngestSeq -= 1;
-    }
-    const normalized = normalizeShard(rawShard);
-    return {
-      ...normalized,
-      ingestSeq: hasValidIngestSeq ? rawShard.ingestSeq : inferredIngestSeq,
-    };
-  });
-};
 
   const DEFAULT_SESSION_STATS: UsageSession = {
     totalInput: 0,
@@ -209,47 +125,11 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
   // Hydrate from localStorage
   useEffect(() => {
     try {
-      const now = Date.now();
-      const savedV2 = localStorage.getItem(STORAGE_KEY_V2);
-      let hydratedFromV2 = false;
-      if (savedV2) {
-        const parsedV2 = JSON.parse(savedV2) as PersistedCollectioV2;
-        if (parsedV2 && parsedV2.version === 2 && Array.isArray(parsedV2.shards)) {
-          const normalizedShards = inferAndNormalizeShards(parsedV2.shards);
-          const parsedTransactions = Array.isArray(parsedV2.undoTransactions)
-            ? parsedV2.undoTransactions.filter(isUndoTransaction)
-            : [];
-          const { shards, transactions } = expireTransactions(normalizedShards, parsedTransactions, now);
-          setAllShards(shards);
-          setUndoTransactions(transactions);
-
-          const inferredNext = shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
-          const persistedNext = typeof parsedV2.nextIngestSeq === 'number' && Number.isFinite(parsedV2.nextIngestSeq)
-            ? parsedV2.nextIngestSeq
-            : 1;
-          nextIngestSeqRef.current = Math.max(inferredNext, persistedNext);
-          hydratedFromV2 = true;
-        }
-      }
-
-      if (!hydratedFromV2) {
-        const savedShards = localStorage.getItem(STORAGE_KEY);
-        if (savedShards) {
-          const parsed = JSON.parse(savedShards) as Shard[];
-          const rehydrated = inferAndNormalizeShards(parsed.filter((shard: Shard) => !shard.deletedAt));
-          setAllShards(rehydrated);
-          setUndoTransactions([]);
-          nextIngestSeqRef.current = rehydrated.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
-        } else {
-          nextIngestSeqRef.current = 1;
-          setUndoTransactions([]);
-        }
-      }
-
-      const savedStats = localStorage.getItem(STATS_KEY);
-      if (savedStats) {
-        setSessionStats(JSON.parse(savedStats));
-      }
+      const hydrated = hydrateCollectioState();
+      setAllShards(hydrated.shards);
+      setUndoTransactions(hydrated.transactions);
+      nextIngestSeqRef.current = hydrated.nextIngestSeq;
+      if (hydrated.sessionStats) setSessionStats(hydrated.sessionStats);
     } catch (e) {
       console.error('Failed to hydrate Collectio state:', e);
       nextIngestSeqRef.current = 1;
@@ -263,30 +143,15 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
     if (!isHydrated) return;
 
     const timer = setTimeout(() => {
-      const v2Payload: PersistedCollectioV2 = {
-        version: 2,
-        shards: allShards,
-        undoTransactions,
-        nextIngestSeq: nextIngestSeqRef.current,
-      };
-
-      const legacyShards = allShards.filter(s => !s.deletedAt);
-
-      try {
-        localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(v2Payload));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacyShards));
+      const result = persistCollectioState(allShards, undoTransactions, nextIngestSeqRef.current);
+      if (result.ok) {
         if (storageError) setStorageError(null);
-      } catch (e) {
-        if (e instanceof DOMException && (
-          e.name === 'QuotaExceededError' ||
-          e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
-        )) {
-          console.error('Storage quota exceeded:', e);
-          setStorageError('Storage full. Data will not persist after refresh. Consider clearing old shards.');
-        } else {
-          console.error('Failed to persist shards:', e);
-          setStorageError('Failed to save data. Changes may not persist.');
-        }
+      } else if (result.error === 'quota') {
+        console.error('Storage quota exceeded while persisting Collectio state.');
+        setStorageError('Storage full. Data will not persist after refresh. Consider clearing old shards.');
+      } else {
+        console.error('Failed to persist Collectio state.');
+        setStorageError('Failed to save data. Changes may not persist.');
       }
     }, 500);
 
@@ -297,7 +162,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
   useEffect(() => {
     if (!isHydrated) return;
     try {
-      localStorage.setItem(STATS_KEY, JSON.stringify(sessionStats));
+      persistCollectioStats(sessionStats);
     } catch (e) {
       // Stats are less critical, just log
       console.warn('Failed to persist stats:', e);
@@ -339,15 +204,22 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
   }, [undoTransactions, isHydrated, expireDueTransactions]);
 
   // Update session stats with usage metadata
-  const updateStats = useCallback((usageMetadata?: UsageMetadata) => {
+  const updateStats = useCallback((usageMetadata?: UsageMetadata, actualCostNano?: string) => {
     if (!usageMetadata) return;
     const effectiveModelId = modelId || 'gemini-2.5-flash-lite';
     const inputTokens = usageMetadata.promptTokens;
     const outputTokens = usageMetadata.candidatesTokens;
-    const costNano = calculateCostNano(effectiveModelId, inputTokens, outputTokens);
+    const costNano = calculateCostNano(
+      effectiveModelId,
+      inputTokens,
+      outputTokens,
+      usageMetadata.cachedPromptTokens ?? 0,
+      usageMetadata.totalTokens
+    );
     
     setSessionStats(prev => {
-      const nextNano = BigInt(prev.estimatedCostNano || '0') + costNano;
+      const effectiveCostNano = actualCostNano ? BigInt(actualCostNano) : costNano;
+      const nextNano = BigInt(prev.estimatedCostNano || '0') + effectiveCostNano;
       return {
         totalInput: prev.totalInput + usageMetadata.promptTokens,
         totalOutput: prev.totalOutput + usageMetadata.candidatesTokens,
@@ -445,7 +317,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
         } : s)
       );
 
-      updateStats(result.usageMetadata);
+      updateStats(result.usageMetadata, result.actualCostNano);
     } catch (error) {
       console.error('Indexing failed:', error);
       setAllShards(prev => 
@@ -456,7 +328,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
         } : s)
       );
     }
-  }, [apiKey, updateStats, allShards, uniqueDomains]);
+  }, [apiKey, allShards, modelId, provider, uniqueDomains, updateStats]);
 
   // Soft delete a shard (can be undone within TTL)
   const deleteShard = useCallback((id: string) => {
@@ -653,7 +525,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
         } : s)
       );
 
-      updateStats(result.usageMetadata);
+      updateStats(result.usageMetadata, result.actualCostNano);
     } catch (error) {
       console.error('Retry indexing failed:', error);
       setAllShards(prev => 
@@ -664,19 +536,14 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
         } : s)
       );
     }
-  }, [allShards, apiKey, updateStats, uniqueDomains]);
+  }, [allShards, apiKey, modelId, provider, uniqueDomains, updateStats]);
 
   // Compile all shards to markdown with smart manifest generation
   // If selectedIds has items, compile ONLY selected shards; otherwise compile ALL ready shards
   const compile = useCallback(async (): Promise<{ markdown: string; manifest: CollectionManifest }> => {
     const activeShards = getCompileShards();
     
-    const fallbackManifest: CollectionManifest = {
-      title: `Verbum Collection [${new Date().toISOString().split('T')[0]}]`,
-      type: 'mixed',
-      description: 'A curated collection of content fragments.',
-      suggestedFilename: `verbum-collection-${Date.now()}`,
-    };
+    const fallbackManifest = buildFallbackManifest();
 
     if (activeShards.length === 0) {
       return { markdown: '', manifest: fallbackManifest };
@@ -700,70 +567,17 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
       
       // Update stats if we got usage metadata
       if (result.usageMetadata) {
-        updateStats(result.usageMetadata);
+        updateStats(result.usageMetadata, result.actualCostNano);
       }
     } catch (error) {
       console.error('Manifest generation failed, using fallback:', error);
       manifest = fallbackManifest;
     }
 
-    // Build markdown based on collection type
-    let markdown = `# ${manifest.title}\n\n`;
-    markdown += `> ${manifest.description}\n\n`;
-    markdown += `**Type:** ${manifest.type} | **Shards:** ${activeShards.length} | **Tokens:** ${totalTokens.toLocaleString()}\n\n`;
-    markdown += `## Table of Contents\n\n`;
-    
-    activeShards.forEach((shard, index) => {
-      markdown += `${index + 1}. [${shard.metadata!.title}](#${index + 1}-${shard.metadata!.title.toLowerCase().replace(/\s+/g, '-')})\n`;
-    });
-    
-    markdown += `\n---\n\n`;
-
-    // Format content based on collection type
-    activeShards.forEach((shard, index) => {
-      const { title, domain, tags } = shard.metadata!;
-      const tagsFormatted = tags.map(t => `#${t}`).join(' ');
-      
-      markdown += `## ${index + 1}. ${title}\n\n`;
-      markdown += `**Domain:** ${domain} | **Tags:** ${tagsFormatted} | **Tokens:** ${shard.tokenCount.toLocaleString()}\n\n`;
-      
-      // Conditional formatting based on type
-      if (manifest.type === 'codebase') {
-        // Detect language hint from domain/tags
-        const langHint = detectCodeLanguage(domain, tags);
-        markdown += `\`\`\`${langHint}\n${shard.content}\n\`\`\`\n\n`;
-      } else {
-        markdown += `${shard.content}\n\n`;
-      }
-      
-      if (index < activeShards.length - 1) {
-        markdown += `---\n\n`;
-      }
-    });
+    const markdown = buildCollectionMarkdown(activeShards, manifest, totalTokens);
 
     return { markdown, manifest };
-  }, [getCompileShards, apiKey, updateStats]);
-
-  // Helper to detect code language from metadata
-  const detectCodeLanguage = (domain: string, tags: string[]): string => {
-    const allText = `${domain} ${tags.join(' ')}`.toLowerCase();
-    
-    if (allText.includes('typescript') || allText.includes('tsx')) return 'typescript';
-    if (allText.includes('javascript') || allText.includes('jsx') || allText.includes('react')) return 'javascript';
-    if (allText.includes('python')) return 'python';
-    if (allText.includes('rust')) return 'rust';
-    if (allText.includes('go') || allText.includes('golang')) return 'go';
-    if (allText.includes('java')) return 'java';
-    if (allText.includes('c++') || allText.includes('cpp')) return 'cpp';
-    if (allText.includes('sql') || allText.includes('database')) return 'sql';
-    if (allText.includes('bash') || allText.includes('shell')) return 'bash';
-    if (allText.includes('css') || allText.includes('style')) return 'css';
-    if (allText.includes('html')) return 'html';
-    if (allText.includes('json')) return 'json';
-    if (allText.includes('yaml') || allText.includes('yml')) return 'yaml';
-    
-    return ''; // No specific hint
-  };
+  }, [apiKey, getCompileShards, modelId, provider, updateStats]);
 
   // Active shards (filtered view for UI - excludes soft-deleted)
   const shards = allShards.filter(s => !s.deletedAt);

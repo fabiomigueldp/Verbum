@@ -1,4 +1,4 @@
-import { getModelPricing, getProvider, getAllProviders } from '../services/providers';
+import { getModelPricing, getAllProviders } from '../services/providers';
 
 const DEFAULT_MODEL_ID = 'gemini-2.5-flash-lite';
 
@@ -22,22 +22,93 @@ const resolvePricing = (modelId: string) => {
   return { inputPer1M: 0.10, outputPer1M: 0.40 };
 };
 
+const parseDecimal = (value: number): { numerator: bigint; scale: bigint } => {
+  const str = value.toString();
+  if (!str.includes('.')) {
+    return { numerator: BigInt(str), scale: 1n };
+  }
+
+  const [integer, fraction] = str.split('.');
+  const digits = `${integer}${fraction}`;
+  return {
+    numerator: BigInt(digits),
+    scale: 10n ** BigInt(fraction.length),
+  };
+};
+
+const calculateTokenCostNano = (tokens: number, usdPer1M: number): bigint => {
+  if (tokens <= 0 || usdPer1M <= 0) return 0n;
+  const { numerator, scale } = parseDecimal(usdPer1M);
+  const denominator = scale;
+  const raw = BigInt(tokens) * numerator * 1000n;
+  return (raw + denominator / 2n) / denominator;
+};
+
+export interface CostInput {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface CostBreakdown {
+  inputNano: bigint;
+  cachedInputNano: bigint;
+  outputNano: bigint;
+  estimatedNano: bigint;
+}
+
 /**
  * Calculate cost in nanodollars (1 USD = 1,000,000,000 nanodollars).
  * Uses exact integer arithmetic to avoid floating-point drift.
  */
-export const calculateCostNano = (modelId: string, inputTokens: number, outputTokens: number): bigint => {
+export const calculateCostBreakdown = (modelId: string, input: CostInput): CostBreakdown => {
   const pricing = resolvePricing(modelId);
+  const totalTokens = input.totalTokens ?? input.inputTokens + input.outputTokens;
+  const useLongContext = Boolean(
+    pricing.contextWindowThreshold &&
+    totalTokens > pricing.contextWindowThreshold
+  );
 
-  // Convert USD per 1M tokens to nanodollars per token
-  // inputPer1M USD / 1M tokens = inputPer1M * 1_000_000_000 / 1_000_000 = inputPer1M * 1000 nanodollars per token
-  const inputNanoPerToken = BigInt(Math.round(pricing.inputPer1M * 1000));
-  const outputNanoPerToken = BigInt(Math.round(pricing.outputPer1M * 1000));
+  const inputRate = useLongContext && pricing.longContextInputPer1M !== undefined
+    ? pricing.longContextInputPer1M
+    : pricing.inputPer1M;
+  const cachedInputRate = useLongContext && pricing.longContextCachedInputPer1M !== undefined
+    ? pricing.longContextCachedInputPer1M
+    : pricing.cachedInputPer1M;
+  const outputRate = useLongContext && pricing.longContextOutputPer1M !== undefined
+    ? pricing.longContextOutputPer1M
+    : pricing.outputPer1M;
 
-  const inputCost = BigInt(inputTokens) * inputNanoPerToken;
-  const outputCost = BigInt(outputTokens) * outputNanoPerToken;
+  const cachedInputTokens = Math.min(input.cachedInputTokens ?? 0, input.inputTokens);
+  const uncachedInputTokens = Math.max(0, input.inputTokens - cachedInputTokens);
+  const inputNano = calculateTokenCostNano(uncachedInputTokens, inputRate);
+  const cachedInputNano = cachedInputRate === undefined
+    ? calculateTokenCostNano(cachedInputTokens, inputRate)
+    : calculateTokenCostNano(cachedInputTokens, cachedInputRate);
+  const outputNano = calculateTokenCostNano(input.outputTokens, outputRate);
 
-  return inputCost + outputCost;
+  return {
+    inputNano,
+    cachedInputNano,
+    outputNano,
+    estimatedNano: inputNano + cachedInputNano + outputNano,
+  };
+};
+
+export const calculateCostNano = (
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number,
+  cachedInputTokens = 0,
+  totalTokens?: number
+): bigint => {
+  return calculateCostBreakdown(modelId, {
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    totalTokens,
+  }).estimatedNano;
 };
 
 export const calculateCost = (modelId: string, inputTokens: number, outputTokens: number): number => {

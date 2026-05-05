@@ -11,6 +11,7 @@ import {
   getRequestStats,
   getCostsByProvider,
   getCostHistory,
+  getEffectiveCostNano,
 } from '../services/core/telemetry';
 
 interface RequestLogViewerProps {
@@ -112,7 +113,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
         existing.totalTPS += log.tokensPerSecond;
         existing.totalInputTokens += log.inputTokens;
         existing.totalOutputTokens += log.outputTokens;
-        existing.totalCostNano += BigInt(log.estimatedCostNano || '0');
+        existing.totalCostNano += getEffectiveCostNano(log);
         existing.totalTokens += log.totalTokens;
       } else {
         map.set(key, {
@@ -123,7 +124,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
           totalTPS: log.tokensPerSecond,
           totalInputTokens: log.inputTokens,
           totalOutputTokens: log.outputTokens,
-          totalCostNano: BigInt(log.estimatedCostNano || '0'),
+          totalCostNano: getEffectiveCostNano(log),
           totalTokens: log.totalTokens,
         });
       }
@@ -144,9 +145,9 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
     for (const [model, data] of map) {
       const avgDuration = data.calls > 0 ? Math.round(data.totalDuration / data.calls) : 0;
       const avgTPS = data.calls > 0 ? Math.round((data.totalTPS / data.calls) * 10) / 10 : 0;
-      const totalCostNum = Number(data.totalCostNano);
+      const totalCostUsd = Number(data.totalCostNano) / 1_000_000_000;
       const costPer1K = data.totalTokens > 0
-        ? (totalCostNum / data.totalTokens) * 1000
+        ? (totalCostUsd / data.totalTokens) * 1000
         : 0;
 
       result.push({
@@ -327,7 +328,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                             </td>
                             <td className="px-3 py-2 text-right">
                               <span className="text-[11px] text-neutral-300 font-mono tabular-nums">
-                                ${(row.costPer1KTokens / 1_000_000).toFixed(4)}
+                                ${row.costPer1KTokens.toFixed(6)}
                               </span>
                             </td>
                           </tr>
@@ -430,7 +431,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-[10px] text-neutral-400">
-                                      ${formatNanoDollars(BigInt(log.estimatedCostNano), 9)}
+                                      ${formatNanoDollars(getEffectiveCostNano(log), 9)}
                                     </span>
                                     <span className="text-[9px] text-neutral-500">
                                       {log.inputLength} → {log.outputLength ?? 0} chars

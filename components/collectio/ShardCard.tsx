@@ -237,7 +237,8 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
   
   const isLoading = shard.status === 'pending' || shard.status === 'indexing';
   const isError = shard.status === 'error';
-  const isReady = shard.status === 'ready' && shard.metadata;
+  const metadata = shard.status === 'ready' ? shard.metadata : undefined;
+  const isReady = Boolean(metadata);
 
   // Staggered animation delay for entrance
   const animationDelay = `${Math.min(index * 50, 300)}ms`;
@@ -369,7 +370,7 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
               text-[15px] font-medium text-neutral-200 
               leading-snug mb-2 pr-16 line-clamp-2
             ">
-              {shard.metadata.title}
+              {metadata!.title}
             </h3>
 
             {/* Abstract - Expands on hover via grid trick */}
@@ -388,7 +389,7 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
                   transition-all duration-400
                   ${isExpanded ? '' : 'line-clamp-2'}
                 `}>
-                  {shard.metadata.abstract}
+                  {metadata!.abstract}
                 </p>
               </div>
             </div>
@@ -399,16 +400,16 @@ export const ShardCard: React.FC<ShardCardProps> = memo(({
                 text-[11px] text-neutral-500 leading-relaxed
                 line-clamp-2 mb-1
               ">
-                {shard.metadata.abstract}
+                {metadata!.abstract}
               </p>
             )}
 
             {/* Footer - Slides in on hover */}
             <CollapsibleFooter
               isExpanded={isExpanded}
-              domain={shard.metadata.domain}
+              domain={metadata!.domain}
               tokenCount={shard.tokenCount}
-              tags={shard.metadata.tags}
+              tags={metadata!.tags}
             />
           </div>
         )}

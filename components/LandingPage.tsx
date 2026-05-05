@@ -170,7 +170,7 @@ const OmniShowcase = memo(() => {
   const [phase, setPhase] = useState<Phase>('input');
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<number>(0);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
   
   const scenario = SCENARIOS[scenarioIndex];
   const Icon = scenario.icon;

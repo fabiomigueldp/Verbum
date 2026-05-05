@@ -15,7 +15,7 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeGeminiResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
-import { GEMINI_REASONING_DISABLED } from '../core/reasoning';
+import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
 // GEMINI ADAPTER
@@ -25,7 +25,7 @@ import { GEMINI_REASONING_DISABLED } from '../core/reasoning';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 const resolveApiKey = (apiKey?: string): string => {
-  const key = apiKey?.trim() || process.env.GEMINI_API_KEY || process.env.API_KEY;
+  const key = apiKey?.trim();
   if (!key) throw new Error('Missing API key for Google Gemini.');
   return key;
 };
@@ -69,7 +69,7 @@ const generate = async (
         systemInstruction,
         responseMimeType: 'application/json',
         responseSchema: toGeminiSchema(schema) as any,
-        ...GEMINI_REASONING_DISABLED,
+        ...getReasoningConfig('gemini', model),
       },
     });
 
@@ -138,6 +138,7 @@ export class GeminiAdapter implements ProviderAdapter {
         tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
       },
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   }
 
@@ -177,6 +178,7 @@ export class GeminiAdapter implements ProviderAdapter {
           suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
         },
         usageMetadata: result.usage,
+        actualCostNano: result.actualCostNano,
       };
     } catch (error) {
       console.error('Manifest generation error:', error);
@@ -185,10 +187,14 @@ export class GeminiAdapter implements ProviderAdapter {
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {
+    return this.validateModel(apiKey, 'gemini-2.5-flash-lite');
+  }
+
+  async validateModel(apiKey: string, model: string): Promise<boolean> {
     try {
       const client = new GoogleGenAI({ apiKey });
       await client.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: resolveModel(model),
         contents: 'Test',
         config: { responseMimeType: 'text/plain' },
       });

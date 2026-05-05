@@ -9,12 +9,13 @@ import { Composer, ComposerRef } from './components/Composer';
 import { LandingPage } from './components/LandingPage';
 import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
 import { useCollectio } from './hooks/useCollectio';
-import { translateText, refineText, validateApiKey } from './services/aiRouter';
+import { translateText, refineText, validateApiKey, validateProviderModel } from './services/aiRouter';
 import { OperationDetailModal } from './components/OperationDetailModal';
 import { RequestLogViewer } from './components/RequestLogViewer';
 import { getRequestLogById } from './services/core/telemetry';
-import { getProvider, getDefaultProviderId, isValidProvider, getAllProviders } from './services/providers';
-import type { ProviderConfig } from './services/providers';
+import { getFirstModelId, getProvider, getDefaultProviderId, isValidModelForProvider } from './services/providers';
+import { getPublicBuildTimeApiKey, hasPublicBuildTimeApiKey } from './services/core/env';
+import { migrateSettingsStorage, persistModelForProvider } from './services/core/storageMigrations';
 import { 
   TranslationRecord, 
   ToneOption, 
@@ -95,6 +96,7 @@ const App: React.FC = () => {
 
   // -- API Keys (generic: Record<providerId, key>) --
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [modelByProvider, setModelByProvider] = useState<Record<string, string>>({});
 
   // -- Session Stats --
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
@@ -126,22 +128,11 @@ const App: React.FC = () => {
   const baseTextRef = useRef<string>('');
   const skeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // -- Resolve current provider config --
-  const providerConfig = getProvider(provider);
-
   // -- Resolve API key for current provider --
   const resolveApiKey = useCallback((): string => {
     const savedKey = apiKeys[provider]?.trim() || '';
     if (savedKey) return savedKey;
-    // Fallback to env keys from registry
-    const p = getProvider(provider);
-    if (p) {
-      for (const envKey of p.envKeys) {
-        const val = process.env[envKey];
-        if (val) return val;
-      }
-    }
-    return '';
+    return getPublicBuildTimeApiKey(provider);
   }, [apiKeys, provider]);
 
   const resolvedApiKey = resolveApiKey();
@@ -163,63 +154,53 @@ const App: React.FC = () => {
     setShowLanding(false);
   }, []);
 
-  // -- Auth Check --
+  // -- Settings migration / initial auth state --
   useEffect(() => {
-    const checkAuth = async () => {
-      // Migrate legacy keys to new generic format
-      const legacyKeys: Record<string, string> = {};
-      try {
-        const raw = localStorage.getItem('verbum_api_keys');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object') {
-            Object.assign(legacyKeys, parsed);
-          }
-        }
-      } catch { /* ignore */ }
+    const migrated = migrateSettingsStorage();
+    setApiKeys(migrated.apiKeys);
+    setProvider(migrated.provider);
+    setModelByProvider(migrated.modelByProvider);
+    setModel(migrated.activeModel);
 
-      // Backward compat: migrate old individual keys
-      const oldGemini = localStorage.getItem('verbum_api_key_gemini');
-      const oldXai = localStorage.getItem('verbum_api_key_xai');
-      const oldLegacy = localStorage.getItem('verbum_api_key');
-      if (oldGemini && !legacyKeys.gemini) legacyKeys.gemini = oldGemini;
-      if (oldXai && !legacyKeys.xai) legacyKeys.xai = oldXai;
-      if (oldLegacy && !legacyKeys.gemini) legacyKeys.gemini = oldLegacy;
-
-      setApiKeys(legacyKeys);
-
-      // Determine provider to check
-      const savedProvider = localStorage.getItem('verbum_provider');
-      const activeProvider = isValidProvider(savedProvider || '') ? (savedProvider as string) : DEFAULT_PROVIDER;
-      setProvider(activeProvider);
-
-      const keyToCheck = legacyKeys[activeProvider]?.trim() || '';
-      let envKey = '';
-      const p = getProvider(activeProvider);
-      if (p) {
-        for (const envName of p.envKeys) {
-          const val = process.env[envName];
-          if (val) { envKey = val; break; }
-        }
-      }
-
-      const candidateKey = keyToCheck || envKey;
-
-      if (candidateKey) {
-        const isValid = await validateApiKey(activeProvider, candidateKey);
-        if (isValid) {
-          setIsAuthorized(true);
-          return;
-        }
-        if (envKey && !keyToCheck) {
-          setIsEnvKeyInvalid(true);
-        }
-      }
-      setIsAuthorized(false);
-    };
-
-    checkAuth();
+    const candidateKey = migrated.apiKeys[migrated.provider]?.trim()
+      || getPublicBuildTimeApiKey(migrated.provider);
+    setIsAuthorized(candidateKey ? null : false);
   }, []);
+
+  // -- Provider/model health check --
+  useEffect(() => {
+    const key = resolvedApiKey.trim();
+    if (!key) {
+      setIsAuthorized(false);
+      setIsEnvKeyInvalid(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAuthorized(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        const isValidKey = await validateApiKey(provider, key);
+        const isValidModel = isValidKey
+          ? await validateProviderModel(provider, key, model)
+          : false;
+        if (cancelled) return;
+        setIsAuthorized(isValidKey && isValidModel);
+        setIsEnvKeyInvalid(!isValidKey && hasPublicBuildTimeApiKey(provider) && !apiKeys[provider]?.trim());
+      } catch {
+        if (!cancelled) {
+          setIsAuthorized(false);
+          setIsEnvKeyInvalid(hasPublicBuildTimeApiKey(provider) && !apiKeys[provider]?.trim());
+        }
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [apiKeys, model, provider, resolvedApiKey]);
 
   // -- Load Persistence --
   useEffect(() => {
@@ -242,18 +223,6 @@ const App: React.FC = () => {
     const savedContextDepth = localStorage.getItem('verbum_context_depth');
     if (savedContextDepth) {
       try { setContextDepth(JSON.parse(savedContextDepth)); } catch (e) { console.error("Context Depth parse error", e); }
-    }
-
-    const savedModel = localStorage.getItem('verbum_model');
-    if (savedModel) {
-      // Validate against registry — check all providers for this model ID
-      const allProviders = getAllProviders();
-      const isValid = allProviders.some((p) =>
-        p.models.some((m) => m.id === savedModel)
-      );
-      if (isValid) {
-        setModel(savedModel);
-      }
     }
 
     const savedSessionStats = localStorage.getItem('verbum_session_stats');
@@ -300,7 +269,16 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('verbum_api_keys', JSON.stringify(apiKeys));
   }, [apiKeys]);
-  useEffect(() => { localStorage.setItem('verbum_model', model); }, [model]);
+  useEffect(() => {
+    if (!isValidModelForProvider(provider, model)) return;
+    setModelByProvider(prev => {
+      if (prev[provider] === model) {
+        persistModelForProvider(provider, model, prev);
+        return prev;
+      }
+      return persistModelForProvider(provider, model, prev);
+    });
+  }, [model, provider]);
   useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
   useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
   useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
@@ -322,12 +300,19 @@ const App: React.FC = () => {
     return instruction;
   };
 
-  const updateSessionStats = (usageMetadata: UsageMetadata | undefined) => {
+  const updateSessionStats = (usageMetadata: UsageMetadata | undefined, actualCostNano?: string) => {
     if (!usageMetadata) return;
     const inputTokens = usageMetadata.promptTokens;
     const outputTokens = usageMetadata.candidatesTokens;
-    const costNano = calculateCostNano(model, inputTokens, outputTokens);
-    const newTotalNano = sessionCostNanoRef.current + costNano;
+    const costNano = calculateCostNano(
+      model,
+      inputTokens,
+      outputTokens,
+      usageMetadata.cachedPromptTokens ?? 0,
+      usageMetadata.totalTokens
+    );
+    const effectiveCostNano = actualCostNano ? BigInt(actualCostNano) : costNano;
+    const newTotalNano = sessionCostNanoRef.current + effectiveCostNano;
     sessionCostNanoRef.current = newTotalNano;
     const exactCost = Number(newTotalNano) / 1_000_000_000;
 
@@ -382,7 +367,7 @@ const App: React.FC = () => {
 
       const newId = uuidv4();
       const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider, telemetryId: newId });
-      updateSessionStats(result.usageMetadata);
+      updateSessionStats(result.usageMetadata, result.actualCostNano);
       const newRecord: TranslationRecord = {
         id: newId,
         original: input.trim(),
@@ -443,7 +428,7 @@ const App: React.FC = () => {
 
     try {
       const result = await refineText(currentText, instruction, { model, apiKey: effectiveApiKey, provider });
-      updateSessionStats(result.usageMetadata);
+      updateSessionStats(result.usageMetadata, result.actualCostNano);
       setOriginalInput(currentText);
       setInput(result.refined);
       setShowDiff(true);
@@ -502,12 +487,12 @@ const App: React.FC = () => {
     setProvider(nextProvider);
     setIsEnvKeyInvalid(false);
     setIsAuthorized(null);
-    // Reset model to first available for new provider
-    const p = getProvider(nextProvider);
-    if (p && p.models.length > 0) {
-      setModel(p.models[0].id);
-    }
-  }, []);
+    const storedModel = modelByProvider[nextProvider];
+    const nextModel = storedModel && isValidModelForProvider(nextProvider, storedModel)
+      ? storedModel
+      : getFirstModelId(nextProvider);
+    setModel(nextModel);
+  }, [modelByProvider]);
 
   const handleApiKeyChange = useCallback((providerId: string, key: string) => {
     setApiKeys(prev => ({ ...prev, [providerId]: key }));
@@ -621,9 +606,7 @@ const App: React.FC = () => {
           isEnvKey={(() => {
             const saved = apiKeys[provider]?.trim() || '';
             if (saved) return false;
-            const p = getProvider(provider);
-            if (!p) return false;
-            return p.envKeys.some((envName: string) => Boolean(process.env[envName]));
+            return hasPublicBuildTimeApiKey(provider);
           })()}
           onProviderChange={handleProviderChange}
           onModelChange={setModel}

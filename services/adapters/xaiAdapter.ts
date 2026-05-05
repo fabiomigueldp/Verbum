@@ -14,9 +14,6 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
-// xAI does not expose reasoning control via API — model selection determines it.
-// We use grok-4-1-fast-non-reasoning which has no reasoning capability.
-import { XAI_REASONING_DISABLED } from '../core/reasoning';
 
 // ============================================================================
 // XAI ADAPTER
@@ -27,7 +24,7 @@ const XAI_API_BASE = 'https://api.x.ai/v1';
 const DEFAULT_MODEL = 'grok-4-1-fast-non-reasoning';
 
 const resolveApiKey = (apiKey?: string): string => {
-  const key = apiKey?.trim() || process.env.XAI_API_KEY;
+  const key = apiKey?.trim();
   if (!key) throw new Error('Missing API key for xAI.');
   return key;
 };
@@ -151,6 +148,7 @@ export class XAIAdapter implements ProviderAdapter {
         tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
       },
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   }
 
@@ -196,6 +194,7 @@ export class XAIAdapter implements ProviderAdapter {
           suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
         },
         usageMetadata: result.usage,
+        actualCostNano: result.actualCostNano,
       };
     } catch (error) {
       console.error('Manifest generation error:', error);
@@ -209,6 +208,21 @@ export class XAIAdapter implements ProviderAdapter {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async validateModel(apiKey: string, model: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${XAI_API_BASE}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      const models = Array.isArray(data?.data) ? data.data : [];
+      if (models.length === 0) return true;
+      return models.some((entry: any) => entry?.id === resolveModel(model));
     } catch {
       return false;
     }

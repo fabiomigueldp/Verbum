@@ -15,7 +15,7 @@ import {
 } from '../core/prompts';
 import { normalizeDeepSeekResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
 import { parseAndValidate, withRetry, isJsonValidationError } from '../core/validate';
-import { DEEPSEEK_REASONING_DISABLED } from '../core/reasoning';
+import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
 // DEEPSEEK ADAPTER
@@ -27,7 +27,7 @@ const DEEPSEEK_API_BASE = 'https://api.deepseek.com';
 const DEFAULT_MODEL = 'deepseek-v4-flash';
 
 const resolveApiKey = (apiKey?: string): string => {
-  const key = apiKey?.trim() || process.env.DEEPSEEK_API_KEY;
+  const key = apiKey?.trim();
   if (!key) throw new Error('Missing API key for DeepSeek.');
   return key;
 };
@@ -45,6 +45,9 @@ interface DeepSeekPayload {
   max_tokens: number;
   response_format: { type: 'json_object' };
   messages: Array<{ role: string; content: string }>;
+  thinking?: {
+    type: 'disabled';
+  };
 }
 
 const buildSchemaExample = (targetLanguage: string): string => {
@@ -95,12 +98,13 @@ export class DeepSeekAdapter implements ProviderAdapter {
 
     systemInstruction += `\n\nOUTPUT FORMAT EXAMPLE (you must return valid JSON matching this exact shape):\n${buildSchemaExample(langConfig.target)}`;
 
+    const model = resolveModel(config?.model);
     const payload: DeepSeekPayload = {
-      model: resolveModel(config?.model),
+      model,
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      ...DEEPSEEK_REASONING_DISABLED,
+      ...getReasoningConfig('deepseek', model),
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildSafetyEnvelope(text) },
@@ -133,12 +137,13 @@ export class DeepSeekAdapter implements ProviderAdapter {
 
     const systemInstruction = `${REFINEMENT_SYSTEM_INSTRUCTION}\n\nOUTPUT FORMAT EXAMPLE:\n${schemaExample}`;
 
+    const model = resolveModel(config?.model);
     const payload: DeepSeekPayload = {
-      model: resolveModel(config?.model),
+      model,
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      ...DEEPSEEK_REASONING_DISABLED,
+      ...getReasoningConfig('deepseek', model),
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
@@ -172,12 +177,13 @@ export class DeepSeekAdapter implements ProviderAdapter {
 
     const systemInstruction = `${buildIndexerInstruction(existingDomains)}\n\nOUTPUT FORMAT EXAMPLE:\n${schemaExample}`;
 
+    const model = resolveModel(config?.model);
     const payload: DeepSeekPayload = {
-      model: resolveModel(config?.model),
+      model,
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      ...DEEPSEEK_REASONING_DISABLED,
+      ...getReasoningConfig('deepseek', model),
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildIndexerUserPrompt(text) },
@@ -205,6 +211,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
         tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
       },
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   }
 
@@ -233,12 +240,13 @@ export class DeepSeekAdapter implements ProviderAdapter {
     const systemInstruction = `${MANIFEST_SYSTEM_INSTRUCTION}\n\nOUTPUT FORMAT EXAMPLE:\n${schemaExample}`;
 
     try {
+      const model = resolveModel(config?.model);
       const payload: DeepSeekPayload = {
-        model: resolveModel(config?.model),
+        model,
         temperature: 0,
         max_tokens: 2048,
         response_format: { type: 'json_object' },
-        ...DEEPSEEK_REASONING_DISABLED,
+        ...getReasoningConfig('deepseek', model),
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: buildManifestUserPrompt(shards) },
@@ -269,6 +277,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
           suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
         },
         usageMetadata: result.usage,
+        actualCostNano: result.actualCostNano,
       };
     } catch (error) {
       console.error('Manifest generation error:', error);
@@ -282,6 +291,21 @@ export class DeepSeekAdapter implements ProviderAdapter {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async validateModel(apiKey: string, model: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${DEEPSEEK_API_BASE}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      const models = Array.isArray(data?.data) ? data.data : [];
+      if (models.length === 0) return true;
+      return models.some((entry: any) => entry?.id === resolveModel(model));
     } catch {
       return false;
     }

@@ -14,16 +14,26 @@ export interface RawAdapterResponse {
     total: number;
     cachedInput?: number;
     reasoning?: number;
-    costUsd?: number;
+    actualCostNano?: string;
   };
 }
 
 export interface NormalizedResponse {
   text: string;
   usage: UsageMetadata | undefined;
-  costUsd?: number;
+  actualCostNano?: string;
   raw: unknown;
 }
+
+const ticksToNanoDollars = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  try {
+    const ticks = BigInt(String(value));
+    return ((ticks + 5n) / 10n).toString();
+  } catch {
+    return undefined;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Gemini
@@ -55,7 +65,7 @@ export const normalizeOpenAIResponse = (raw: any): RawAdapterResponse => {
       total: usage.total_tokens ?? 0,
       cachedInput: usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens,
       reasoning: usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens,
-      costUsd: usage.cost_in_usd_ticks ? usage.cost_in_usd_ticks / 10_000_000_000 : undefined,
+      actualCostNano: ticksToNanoDollars(usage.cost_in_usd_ticks),
     } : undefined,
   };
 };
@@ -103,7 +113,9 @@ export const toNormalizedResponse = (
     promptTokens: raw.usage.input,
     candidatesTokens: raw.usage.output,
     totalTokens: raw.usage.total,
+    cachedPromptTokens: raw.usage.cachedInput,
+    reasoningTokens: raw.usage.reasoning,
   } : undefined,
-  costUsd: raw.usage?.costUsd,
+  actualCostNano: raw.usage?.actualCostNano,
   raw: originalRaw,
 });

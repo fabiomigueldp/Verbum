@@ -42,4 +42,6 @@ export interface ProviderAdapter {
   ): Promise<ManifestResponse>;
 
   validateApiKey(apiKey: string): Promise<boolean>;
+
+  validateModel(apiKey: string, model: string): Promise<boolean>;
 }

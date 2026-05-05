@@ -10,7 +10,7 @@ import { estimateTokens } from '../../utils/tokens';
 // ============================================================================
 
 interface IngestionDeckProps {
-  onIngest: (content: string) => void;
+  onIngest: (content: string) => Promise<void> | void;
   disabled?: boolean;
 }
 
@@ -74,16 +74,14 @@ export const IngestionDeck: React.FC<IngestionDeckProps> = memo(({
       setFillProgress((i / steps) * 100);
     }
 
-    // Execute ingestion
-    onIngest(content);
-    
-    // Clear and reset
-    setContent('');
-    setFillProgress(0);
-    setIsIngesting(false);
-    
-    // Refocus textarea
-    textareaRef.current?.focus();
+    try {
+      await onIngest(content);
+      setContent('');
+    } finally {
+      setFillProgress(0);
+      setIsIngesting(false);
+      textareaRef.current?.focus();
+    }
   }, [content, isIngesting, disabled, onIngest]);
 
   // Handle keyboard shortcuts

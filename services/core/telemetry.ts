@@ -21,10 +21,13 @@ export interface RequestLog {
   errorType?: ErrorType;
   errorMessage?: string;
   inputTokens: number;
+  cachedInputTokens?: number;
   outputTokens: number;
+  reasoningTokens?: number;
   totalTokens: number;
   estimatedCostNano: string;
   actualCostNano?: string;
+  costSource?: 'estimated' | 'provider_actual';
   inputLength: number;
   outputLength?: number;
   inputPreview: string;
@@ -129,14 +132,22 @@ export const logRequest = (entry: Omit<RequestLog, 'id' | 'timestamp' | 'tokensP
     tokensPerSecond: computeTokensPerSecond(entry.totalTokens, entry.durationMs),
   };
 
-  // FIFO: add to front, trim to max
-  const nextLogs = [log, ...logs].slice(0, MAX_ENTRIES);
+  const existingIndex = logs.findIndex((existing) => existing.id === log.id);
+  const remainingLogs = existingIndex >= 0
+    ? logs.filter((existing) => existing.id !== log.id)
+    : logs;
+
+  // FIFO: add to front, trim to max. Duplicate ids are replaced.
+  const nextLogs = [log, ...remainingLogs].slice(0, MAX_ENTRIES);
   saveLogs(nextLogs);
 
   return log;
 };
 
 export const getRequestLogs = (): RequestLog[] => loadLogs();
+
+export const getEffectiveCostNano = (log: Pick<RequestLog, 'actualCostNano' | 'estimatedCostNano'>): bigint =>
+  BigInt(log.actualCostNano || log.estimatedCostNano || '0');
 
 export const getRequestLogById = (id: string): RequestLog | undefined => {
   return loadLogs().find((log) => log.id === id);
@@ -181,7 +192,7 @@ export const getRequestStats = (): RequestStats => {
   const successLogs = logs.filter((l) => l.status === 'success');
   const totalDuration = successLogs.reduce((sum, l) => sum + l.durationMs, 0);
   const totalTPS = successLogs.reduce((sum, l) => sum + l.tokensPerSecond, 0);
-  const totalCostNano = logs.reduce((sum, l) => sum + BigInt(l.estimatedCostNano || '0'), 0n);
+  const totalCostNano = logs.reduce((sum, l) => sum + getEffectiveCostNano(l), 0n);
 
   return {
     totalOps: logs.length,
@@ -214,7 +225,7 @@ export const getCostsByProvider = (): ProviderCost[] => {
 
   for (const log of logs) {
     const existing = map.get(log.provider);
-    const costNano = BigInt(log.estimatedCostNano || '0');
+    const costNano = getEffectiveCostNano(log);
     if (existing) {
       existing.ops += 1;
       existing.errors += log.status === 'error' ? 1 : 0;
@@ -258,7 +269,7 @@ export const getCostHistory = (days: number): DailyCost[] => {
   for (const log of filtered) {
     const date = new Date(log.timestamp).toISOString().slice(0, 10);
     const existing = map.get(date);
-    const costNano = BigInt(log.estimatedCostNano || '0');
+    const costNano = getEffectiveCostNano(log);
     if (existing) {
       existing.costNano += costNano;
       existing.ops += 1;

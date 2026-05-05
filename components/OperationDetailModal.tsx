@@ -3,6 +3,7 @@ import { X, Clock, Zap, Type, DollarSign, AlertTriangle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { RequestLog } from '../types';
 import { formatNanoDollars } from '../utils/pricing';
+import { getEffectiveCostNano } from '../services/core/telemetry';
 
 interface OperationDetailModalProps {
   log: RequestLog;
@@ -145,9 +146,11 @@ export const OperationDetailModal: React.FC<OperationDetailModalProps> = ({ log,
               <div className="flex items-center gap-2">
                 <DollarSign size={12} className="text-neutral-600" />
                 <div className="flex flex-col">
-                  <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">Est. Cost</span>
+                  <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">
+                    {log.actualCostNano ? 'Actual Cost' : 'Est. Cost'}
+                  </span>
                   <span className="text-[12px] text-neutral-300 font-mono">
-                    ${formatNanoDollars(BigInt(log.estimatedCostNano), 9)}
+                    ${formatNanoDollars(getEffectiveCostNano(log), 9)}
                   </span>
                 </div>
               </div>

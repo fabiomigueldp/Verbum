@@ -6,40 +6,37 @@
 // fast output — reasoning adds latency, cost, and unpredictability.
 // ============================================================================
 
-/**
- * Gemini native reasoning config.
- * thinkingBudget: 0 explicitly disables thinking tokens.
- * -1 would mean "automatic" (model decides).
- */
-export const GEMINI_REASONING_DISABLED = {
-  thinkingConfig: {
-    thinkingBudget: 0,
+import { getModelConfig, ReasoningMode } from '../providers';
+
+type ReasoningConfig = Record<string, unknown>;
+
+const REASONING_CONFIGS: Record<ReasoningMode, ReasoningConfig | undefined> = {
+  'gemini-disabled': {
+    thinkingConfig: {
+      thinkingBudget: 0,
+    },
   },
+  'openai-none': {
+    reasoning: {
+      effort: 'none' as const,
+    },
+  },
+  'openai-low': {
+    reasoning: {
+      effort: 'low' as const,
+    },
+  },
+  'deepseek-disabled': {
+    thinking: {
+      type: 'disabled' as const,
+    },
+  },
+  'model-selected': undefined,
+  unsupported: undefined,
 };
 
-/**
- * OpenAI Responses API reasoning config.
- * effort: 'none' disables reasoning entirely.
- */
-export const OPENAI_REASONING_DISABLED = {
-  reasoning: {
-    effort: 'none' as const,
-  },
+export const getReasoningConfig = (providerId: string, modelId: string): ReasoningConfig => {
+  const model = getModelConfig(providerId, modelId);
+  if (!model) return {};
+  return REASONING_CONFIGS[model.capabilities.reasoning] || {};
 };
-
-/**
- * DeepSeek reasoning config.
- * thinking.type: 'disabled' prevents the model from generating CoT.
- */
-export const DEEPSEEK_REASONING_DISABLED = {
-  thinking: {
-    type: 'disabled' as const,
-  },
-};
-
-/**
- * xAI does not expose reasoning control via the Chat Completions API.
- * Reasoning vs non-reasoning is determined by model selection only.
- * We use grok-4-1-fast-non-reasoning which has no reasoning capability.
- */
-export const XAI_REASONING_DISABLED = undefined;

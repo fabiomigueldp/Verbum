@@ -76,7 +76,7 @@ export const RefineModal = ({
   onDeleteCustomTone,
   onClose,
   initialFocus,
-}) => {
+}: RefineModalProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showEngine, setShowEngine] = useState(initialFocus === 'engine');
@@ -240,7 +240,7 @@ export const RefineModal = ({
 
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-[10px] text-neutral-600 font-light">
-                        {isEnvKey ? 'Loaded from environment' : 'Stored locally'}
+                        {isEnvKey ? 'Loaded from public dev env' : 'Stored locally'}
                       </span>
                       {providerConfig?.keyUrl && (
                         <a

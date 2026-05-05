@@ -10,21 +10,35 @@ import {
   ShardSummary,
   UsageMetadata,
 } from '../types';
-import { getProvider } from './providers';
+import { getFirstModelId, getProvider, isValidModelForProvider } from './providers';
 import { parseAndValidate } from './core/validate';
 import { TranslationSchema, RefinementSchema } from './core/schemas';
 import { logRequest, classifyErrorForTelemetry, preview } from './core/telemetry';
 import { calculateCostNano } from '../utils/pricing';
+import { NormalizedResponse } from './core/normalize';
 
 export type Provider = string;
 
-const getAdapter = (config?: AiRuntimeConfig) => {
+const resolveRuntime = (config?: AiRuntimeConfig) => {
   const providerId = config?.provider || 'gemini';
   const provider = getProvider(providerId);
   if (!provider) {
     throw new Error(`Unknown provider: ${providerId}`);
   }
-  return provider.adapter();
+  const requestedModel = config?.model || '';
+  const model = requestedModel && isValidModelForProvider(providerId, requestedModel)
+    ? requestedModel
+    : getFirstModelId(providerId);
+  return {
+    providerId,
+    model,
+    adapter: provider.adapter(),
+    config: {
+      ...config,
+      provider: providerId,
+      model,
+    },
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -37,11 +51,24 @@ const createLogEntry = (
   operation: 'translate' | 'refine' | 'index' | 'manifest',
   inputText: string,
   startTime: number,
-  result?: { usage?: UsageMetadata; text?: string; costUsd?: number },
+  result?: { usage?: UsageMetadata; text?: string; actualCostNano?: string },
   error?: unknown,
   id?: string
 ) => {
   const durationMs = performance.now() - startTime;
+  const usage = result?.usage;
+  const inputTokens = usage?.promptTokens ?? 0;
+  const cachedInputTokens = usage?.cachedPromptTokens ?? 0;
+  const outputTokens = usage?.candidatesTokens ?? 0;
+  const reasoningTokens = usage?.reasoningTokens ?? 0;
+  const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens + reasoningTokens;
+  const estimatedCostNano = calculateCostNano(
+    model,
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    totalTokens
+  );
 
   if (error) {
     const { type, message } = classifyErrorForTelemetry(error);
@@ -54,24 +81,19 @@ const createLogEntry = (
       status: 'error',
       errorType: type,
       errorMessage: message,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      estimatedCostNano: '0',
+      inputTokens,
+      cachedInputTokens,
+      outputTokens,
+      reasoningTokens,
+      totalTokens,
+      estimatedCostNano: usage ? estimatedCostNano.toString() : '0',
+      actualCostNano: result?.actualCostNano,
+      costSource: result?.actualCostNano ? 'provider_actual' : 'estimated',
       inputLength: inputText.length,
       inputPreview: preview(inputText),
     });
     return;
   }
-
-  const usage = result?.usage;
-  const inputTokens = usage?.promptTokens ?? 0;
-  const outputTokens = usage?.candidatesTokens ?? 0;
-  const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens;
-  const estimatedCostNano = calculateCostNano(model, inputTokens, outputTokens);
-  const actualCostNano = result?.costUsd
-    ? BigInt(Math.round(result.costUsd * 1_000_000_000)).toString()
-    : undefined;
 
   const hasPreview = operation === 'translate' || operation === 'refine';
 
@@ -83,10 +105,13 @@ const createLogEntry = (
     durationMs: Math.round(durationMs * 100) / 100,
     status: 'success',
     inputTokens,
+    cachedInputTokens,
     outputTokens,
+    reasoningTokens,
     totalTokens,
     estimatedCostNano: estimatedCostNano.toString(),
-    actualCostNano,
+    actualCostNano: result?.actualCostNano,
+    costSource: result?.actualCostNano ? 'provider_actual' : 'estimated',
     inputLength: inputText.length,
     outputLength: result?.text?.length ?? 0,
     inputPreview: hasPreview ? preview(inputText) : '',
@@ -105,21 +130,19 @@ export const translateText = async (
   contextHistory?: ContextMessage[],
   config?: AiRuntimeConfig
 ): Promise<TranslationResponse> => {
-  const adapter = getAdapter(config);
-  const provider = config?.provider || 'gemini';
-  const model = config?.model || '';
+  const runtime = resolveRuntime(config);
+  const { adapter, providerId: provider, model } = runtime;
   const start = performance.now();
+  let result: NormalizedResponse | undefined;
 
   try {
-    const result = await adapter.translateText(
+    result = await adapter.translateText(
       text,
       langConfig,
       refinementInstruction,
       contextHistory,
-      config || {}
+      runtime.config
     );
-
-    createLogEntry(provider, model, 'translate', text, start, result, undefined, config?.telemetryId);
 
     const parsed = parseAndValidate(result.text, TranslationSchema) as {
       translation: string;
@@ -127,14 +150,17 @@ export const translateText = async (
       targetLanguageUsed: string;
     };
 
+    createLogEntry(provider, model, 'translate', text, start, result, undefined, config?.telemetryId);
+
     return {
       translation: parsed.translation,
       detectedSourceLanguage: (parsed.detectedSourceLanguage || 'unknown') as LanguageCode,
       targetLanguageUsed: (parsed.targetLanguageUsed || langConfig.target) as Exclude<LanguageCode, 'unknown'>,
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   } catch (error) {
-    createLogEntry(provider, model, 'translate', text, start, undefined, error, config?.telemetryId);
+    createLogEntry(provider, model, 'translate', text, start, result, error, config?.telemetryId);
     throw error;
   }
 };
@@ -148,15 +174,13 @@ export const refineText = async (
   instruction: string,
   config?: AiRuntimeConfig
 ): Promise<RefinementResponse> => {
-  const adapter = getAdapter(config);
-  const provider = config?.provider || 'gemini';
-  const model = config?.model || '';
+  const runtime = resolveRuntime(config);
+  const { adapter, providerId: provider, model } = runtime;
   const start = performance.now();
+  let result: NormalizedResponse | undefined;
 
   try {
-    const result = await adapter.refineText(text, instruction, config || {});
-
-    createLogEntry(provider, model, 'refine', text, start, result, undefined, config?.telemetryId);
+    result = await adapter.refineText(text, instruction, runtime.config);
 
     const parsed = parseAndValidate(result.text, RefinementSchema) as {
       refined: string;
@@ -164,14 +188,17 @@ export const refineText = async (
       detectedLanguage?: string;
     };
 
+    createLogEntry(provider, model, 'refine', text, start, result, undefined, config?.telemetryId);
+
     return {
       refined: parsed.refined,
       changes: parsed.changes,
       detectedLanguage: (parsed.detectedLanguage || 'unknown') as LanguageCode,
       usageMetadata: result.usage,
+      actualCostNano: result.actualCostNano,
     };
   } catch (error) {
-    createLogEntry(provider, model, 'refine', text, start, undefined, error, config?.telemetryId);
+    createLogEntry(provider, model, 'refine', text, start, result, error, config?.telemetryId);
     throw error;
   }
 };
@@ -191,11 +218,11 @@ export const indexText = async (
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
   const adapter = p.adapter();
-  const resolvedModel = model || '';
+  const resolvedModel = model && isValidModelForProvider(provider, model) ? model : getFirstModelId(provider);
   const start = performance.now();
 
   try {
-    const result = await adapter.indexText(text, existingDomains, { provider, apiKey, model });
+    const result = await adapter.indexText(text, existingDomains, { provider, apiKey, model: resolvedModel });
 
     // IndexerResponse doesn't have 'text', construct a pseudo-result for logging
     createLogEntry(
@@ -204,7 +231,7 @@ export const indexText = async (
       'index',
       text,
       start,
-      { usage: result.usageMetadata, text: JSON.stringify(result.metadata) },
+      { usage: result.usageMetadata, text: JSON.stringify(result.metadata), actualCostNano: result.actualCostNano },
       undefined,
       telemetryId
     );
@@ -230,12 +257,12 @@ export const generateCollectionManifest = async (
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
   const adapter = p.adapter();
-  const resolvedModel = model || '';
+  const resolvedModel = model && isValidModelForProvider(provider, model) ? model : getFirstModelId(provider);
   const inputText = `Manifest for ${shards.length} shards`;
   const start = performance.now();
 
   try {
-    const result = await adapter.generateManifest(shards, { provider, apiKey, model });
+    const result = await adapter.generateManifest(shards, { provider, apiKey, model: resolvedModel });
 
     createLogEntry(
       provider,
@@ -243,7 +270,7 @@ export const generateCollectionManifest = async (
       'manifest',
       inputText,
       start,
-      { usage: result.usageMetadata, text: JSON.stringify(result.manifest) },
+      { usage: result.usageMetadata, text: JSON.stringify(result.manifest), actualCostNano: result.actualCostNano },
       undefined,
       telemetryId
     );
@@ -267,4 +294,15 @@ export const validateApiKey = async (
   if (!p) throw new Error(`Unknown provider: ${provider}`);
   const adapter = p.adapter();
   return adapter.validateApiKey(apiKey);
+};
+
+export const validateProviderModel = async (
+  provider: Provider,
+  apiKey: string,
+  model: string
+): Promise<boolean> => {
+  const p = getProvider(provider);
+  if (!p) throw new Error(`Unknown provider: ${provider}`);
+  const adapter = p.adapter();
+  return adapter.validateModel(apiKey, model);
 };
