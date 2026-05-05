@@ -15,6 +15,7 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeGeminiResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+import { GEMINI_REASONING_DISABLED } from '../core/reasoning';
 
 // ============================================================================
 // GEMINI ADAPTER
@@ -61,15 +62,16 @@ const generate = async (
 ): Promise<NormalizedResponse> => {
   const client = new GoogleGenAI({ apiKey });
 
-  const response = await client.models.generateContent({
-    model,
-    contents: userContent,
-    config: {
-      systemInstruction,
-      responseMimeType: 'application/json',
-      responseSchema: toGeminiSchema(schema) as any,
-    },
-  });
+    const response = await client.models.generateContent({
+      model,
+      contents: userContent,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: toGeminiSchema(schema) as any,
+        ...GEMINI_REASONING_DISABLED,
+      },
+    });
 
   const raw = normalizeGeminiResponse(response);
   return toNormalizedResponse(raw, response);

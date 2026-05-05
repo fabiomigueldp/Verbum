@@ -14,6 +14,7 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+import { OPENAI_REASONING_DISABLED } from '../core/reasoning';
 
 // ============================================================================
 // OPENAI ADAPTER
@@ -47,7 +48,6 @@ interface OpenAIPayload {
       schema: Record<string, unknown>;
     };
   };
-  reasoning?: { effort: 'none' | 'low' | 'medium' | 'high' };
   max_output_tokens?: number;
 }
 
@@ -107,7 +107,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      reasoning: { effort: 'none' },
+      ...OPENAI_REASONING_DISABLED,
       max_output_tokens: 2048,
     };
 
@@ -138,7 +138,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      reasoning: { effort: 'none' },
+      ...OPENAI_REASONING_DISABLED,
       max_output_tokens: 2048,
     };
 
@@ -169,7 +169,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           },
         },
       },
-      reasoning: { effort: 'none' },
+      ...OPENAI_REASONING_DISABLED,
       max_output_tokens: 2048,
     };
 
@@ -221,7 +221,7 @@ export class OpenAIAdapter implements ProviderAdapter {
             },
           },
         },
-        reasoning: { effort: 'none' },
+        ...OPENAI_REASONING_DISABLED,
         max_output_tokens: 2048,
       };
 

@@ -15,6 +15,7 @@ import {
 } from '../core/prompts';
 import { normalizeDeepSeekResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
 import { parseAndValidate, withRetry, isJsonValidationError } from '../core/validate';
+import { DEEPSEEK_REASONING_DISABLED } from '../core/reasoning';
 
 // ============================================================================
 // DEEPSEEK ADAPTER
@@ -43,7 +44,6 @@ interface DeepSeekPayload {
   temperature: number;
   max_tokens: number;
   response_format: { type: 'json_object' };
-  thinking?: { type: 'disabled' };
   messages: Array<{ role: string; content: string }>;
 }
 
@@ -100,7 +100,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' },
+      ...DEEPSEEK_REASONING_DISABLED,
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildSafetyEnvelope(text) },
@@ -138,7 +138,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' },
+      ...DEEPSEEK_REASONING_DISABLED,
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
@@ -177,7 +177,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
       temperature: 0,
       max_tokens: 2048,
       response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' },
+      ...DEEPSEEK_REASONING_DISABLED,
       messages: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildIndexerUserPrompt(text) },
@@ -238,7 +238,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
         temperature: 0,
         max_tokens: 2048,
         response_format: { type: 'json_object' },
-        thinking: { type: 'disabled' },
+        ...DEEPSEEK_REASONING_DISABLED,
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: buildManifestUserPrompt(shards) },

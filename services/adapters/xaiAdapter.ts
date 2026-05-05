@@ -14,6 +14,9 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+// xAI does not expose reasoning control via API — model selection determines it.
+// We use grok-4-1-fast-non-reasoning which has no reasoning capability.
+import { XAI_REASONING_DISABLED } from '../core/reasoning';
 
 // ============================================================================
 // XAI ADAPTER
