@@ -1,47 +1,42 @@
-import { XAI_MODEL_ID } from '../types';
+import { getModelPricing, getProvider, getAllProviders } from '../services/providers';
 
-const DEFAULT_MODEL_ID = 'gemini-2.5-flash';
+const DEFAULT_MODEL_ID = 'gemini-2.5-flash-lite';
 
-// Pricing per 1M tokens (USD) for standard text usage
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
-  'gemini-2.5-flash-lite-preview-09-2025': { input: 0.10, output: 0.40 },
-  'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
-  'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
-  [XAI_MODEL_ID]: { input: 0.20, output: 0.50 },
-};
-
-// Nanodollars per token (exact integer), derived from USD per 1M tokens
-const MODEL_PRICING_NANO: Record<string, { input: bigint; output: bigint }> = {
-  'gemini-2.5-pro': { input: 1250n, output: 10000n },
-  'gemini-2.5-flash': { input: 300n, output: 2500n },
-  'gemini-2.5-flash-lite': { input: 100n, output: 400n },
-  'gemini-2.5-flash-lite-preview-09-2025': { input: 100n, output: 400n },
-  'gemini-2.0-flash-lite': { input: 75n, output: 300n },
-  'gemini-3-flash-preview': { input: 500n, output: 3000n },
-  [XAI_MODEL_ID]: { input: 200n, output: 500n },
-};
-
-const PRO_HIGH_PRICING_NANO = { input: 2500n, output: 15000n };
-
-const resolveModelId = (modelId: string): string => {
-  return MODEL_PRICING_NANO[modelId] ? modelId : DEFAULT_MODEL_ID;
-};
-
-const resolvePricingNano = (modelId: string, inputTokens: number) => {
-  const resolved = resolveModelId(modelId);
-  if (resolved === 'gemini-2.5-pro' && inputTokens > 200_000) {
-    return PRO_HIGH_PRICING_NANO;
+/**
+ * Resolve pricing for a model from the provider registry.
+ * Falls back to default model if not found.
+ */
+const resolvePricing = (modelId: string) => {
+  // Find pricing across all providers
+  const providers = ['gemini', 'xai', 'openai', 'deepseek'];
+  for (const providerId of providers) {
+    const pricing = getModelPricing(providerId, modelId);
+    if (pricing) return pricing;
   }
-  return MODEL_PRICING_NANO[resolved];
+  // Fallback to default
+  for (const providerId of providers) {
+    const pricing = getModelPricing(providerId, DEFAULT_MODEL_ID);
+    if (pricing) return pricing;
+  }
+  // Ultimate fallback
+  return { inputPer1M: 0.10, outputPer1M: 0.40 };
 };
 
+/**
+ * Calculate cost in nanodollars (1 USD = 1,000,000,000 nanodollars).
+ * Uses exact integer arithmetic to avoid floating-point drift.
+ */
 export const calculateCostNano = (modelId: string, inputTokens: number, outputTokens: number): bigint => {
-  const pricing = resolvePricingNano(modelId, inputTokens);
-  const inputCost = BigInt(inputTokens) * pricing.input;
-  const outputCost = BigInt(outputTokens) * pricing.output;
+  const pricing = resolvePricing(modelId);
+
+  // Convert USD per 1M tokens to nanodollars per token
+  // inputPer1M USD / 1M tokens = inputPer1M * 1_000_000_000 / 1_000_000 = inputPer1M * 1000 nanodollars per token
+  const inputNanoPerToken = BigInt(Math.round(pricing.inputPer1M * 1000));
+  const outputNanoPerToken = BigInt(Math.round(pricing.outputPer1M * 1000));
+
+  const inputCost = BigInt(inputTokens) * inputNanoPerToken;
+  const outputCost = BigInt(outputTokens) * outputNanoPerToken;
+
   return inputCost + outputCost;
 };
 
@@ -68,4 +63,13 @@ export const formatNanoDollars = (nano: bigint, decimals = 9, locale = 'en-US'):
   return `${negative ? '-' : ''}${integerStr}.${fractionStr}`;
 };
 
-export const getPricingTable = () => MODEL_PRICING;
+export const getPricingTable = () => {
+  const table: Record<string, { input: number; output: number }> = {};
+  const allProviders = getAllProviders();
+  for (const provider of allProviders) {
+    for (const model of provider.models) {
+      table[model.id] = { input: model.pricing.inputPer1M, output: model.pricing.outputPer1M };
+    }
+  }
+  return table;
+};

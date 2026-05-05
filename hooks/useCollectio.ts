@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
-  estimateTokens, 
+  UsageMetadata, 
+  UsageSession,
   ShardMetadata,
   CollectionManifest,
-  CollectionType
-} from '../services/indexerService';
+  CollectionType,
+} from '../types';
 import { indexText, generateCollectionManifest } from '../services/aiRouter';
-import { UsageMetadata, UsageSession, XAI_MODEL_ID } from '../types';
 import { calculateCostNano } from '../utils/pricing';
+import { estimateTokens } from '../utils/tokens';
 import { computeHash } from '../utils/cryptoUtils';
 
 // ============================================================================
@@ -158,11 +159,7 @@ const inferAndNormalizeShards = (parsedShards: Shard[]): Shard[] => {
     requestCount: 0,
   };
 
-const getModelId = (provider: 'gemini' | 'xai', modelId?: string) => (
-  provider === 'xai' ? XAI_MODEL_ID : (modelId || 'gemini-2.5-flash-lite')
-);
-
-export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemini', modelId?: string) => {
+export const useCollectio = (apiKey?: string, provider: string = 'gemini', modelId?: string) => {
   // Internal state includes soft-deleted items
   const [allShards, setAllShards] = useState<Shard[]>([]);
   const [undoTransactions, setUndoTransactions] = useState<UndoTransaction[]>([]);
@@ -344,7 +341,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
   // Update session stats with usage metadata
   const updateStats = useCallback((usageMetadata?: UsageMetadata) => {
     if (!usageMetadata) return;
-    const effectiveModelId = getModelId(provider, modelId);
+    const effectiveModelId = modelId || 'gemini-2.5-flash-lite';
     const inputTokens = usageMetadata.promptTokens;
     const outputTokens = usageMetadata.candidatesTokens;
     const costNano = calculateCostNano(effectiveModelId, inputTokens, outputTokens);
@@ -359,7 +356,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
         requestCount: prev.requestCount + 1,
       };
     });
-  }, [provider, modelId]);
+  }, [modelId]);
 
   // Clear duplicate detected flag
   const clearDuplicateFlag = useCallback(() => {
@@ -438,7 +435,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
 
     try {
       // Pass existing domains for taxonomic consistency
-      const result = await indexText(trimmedContent, provider, apiKey, uniqueDomains);
+      const result = await indexText(trimmedContent, provider, apiKey, uniqueDomains, modelId);
       
       setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
@@ -646,7 +643,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
 
     try {
       // Pass existing domains for taxonomic consistency on retry
-      const result = await indexText(shard.content, provider, apiKey, uniqueDomains);
+      const result = await indexText(shard.content, provider, apiKey, uniqueDomains, modelId);
       
       setAllShards(prev => 
         prev.map(s => s.id === id ? { 
@@ -698,7 +695,7 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
         excerpt: s.content.slice(0, 500).replace(/\n/g, ' '),
       }));
 
-      const result = await generateCollectionManifest(provider, shardSummaries, apiKey);
+      const result = await generateCollectionManifest(provider, shardSummaries, apiKey, modelId);
       manifest = result.manifest;
       
       // Update stats if we got usage metadata
@@ -863,4 +860,4 @@ export const useCollectio = (apiKey?: string, provider: 'gemini' | 'xai' = 'gemi
 };
 
 // Re-export types for consumers
-export type { CollectionManifest, CollectionType } from '../services/indexerService';
+export type { CollectionManifest, CollectionType } from '../types';

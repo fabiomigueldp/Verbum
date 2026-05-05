@@ -145,3 +145,40 @@ export interface AiRuntimeConfig {
   model?: ModelOption;
   apiKey?: string;
 }
+
+// ============================================================================
+// INDEXER / COLLECTIO
+// ============================================================================
+
+export interface ShardMetadata {
+  title: string;
+  domain: string;
+  abstract: string;
+  tags: string[];
+}
+
+export interface IndexerResponse {
+  metadata: ShardMetadata;
+  usageMetadata?: UsageMetadata;
+}
+
+export type CollectionType = 'codebase' | 'document' | 'dataset' | 'mixed';
+
+export interface CollectionManifest {
+  title: string;
+  type: CollectionType;
+  description: string;
+  suggestedFilename: string;
+}
+
+export interface ManifestResponse {
+  manifest: CollectionManifest;
+  usageMetadata?: UsageMetadata;
+}
+
+export interface ShardSummary {
+  title: string;
+  domain: string;
+  tags: string[];
+  excerpt: string;
+}

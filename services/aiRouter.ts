@@ -4,23 +4,24 @@ import {
   LanguageConfig,
   TranslationResponse,
   RefinementResponse,
-  ProviderOption,
-} from "../types";
-import { getProvider } from "./providers";
+  LanguageCode,
+  IndexerResponse,
+  ManifestResponse,
+  ShardSummary,
+} from '../types';
+import { getProvider } from './providers';
+import { parseAndValidate } from './core/validate';
+import { TranslationSchema, RefinementSchema } from './core/schemas';
 
-export type Provider = ProviderOption;
+export type Provider = string;
 
-const resolveProvider = (config?: AiRuntimeConfig): Provider => {
-  return config?.provider || 'gemini';
-};
-
-const getService = (config?: AiRuntimeConfig) => {
-  const providerId = resolveProvider(config);
+const getAdapter = (config?: AiRuntimeConfig) => {
+  const providerId = config?.provider || 'gemini';
   const provider = getProvider(providerId);
   if (!provider) {
     throw new Error(`Unknown provider: ${providerId}`);
   }
-  return provider.services;
+  return provider.adapter();
 };
 
 export const translateText = async (
@@ -30,7 +31,27 @@ export const translateText = async (
   contextHistory?: ContextMessage[],
   config?: AiRuntimeConfig
 ): Promise<TranslationResponse> => {
-  return getService(config).translateText(text, langConfig, refinementInstruction, contextHistory, config);
+  const adapter = getAdapter(config);
+  const result = await adapter.translateText(
+    text,
+    langConfig,
+    refinementInstruction,
+    contextHistory,
+    config || {}
+  );
+
+  const parsed = parseAndValidate(result.text, TranslationSchema) as {
+    translation: string;
+    detectedSourceLanguage: string;
+    targetLanguageUsed: string;
+  };
+
+  return {
+    translation: parsed.translation,
+    detectedSourceLanguage: (parsed.detectedSourceLanguage || 'unknown') as LanguageCode,
+    targetLanguageUsed: (parsed.targetLanguageUsed || langConfig.target) as Exclude<LanguageCode, 'unknown'>,
+    usageMetadata: result.usage,
+  };
 };
 
 export const refineText = async (
@@ -38,28 +59,46 @@ export const refineText = async (
   instruction: string,
   config?: AiRuntimeConfig
 ): Promise<RefinementResponse> => {
-  return getService(config).refineText(text, instruction, config);
+  const adapter = getAdapter(config);
+  const result = await adapter.refineText(text, instruction, config || {});
+
+  const parsed = parseAndValidate(result.text, RefinementSchema) as {
+    refined: string;
+    changes: string;
+    detectedLanguage?: string;
+  };
+
+  return {
+    refined: parsed.refined,
+    changes: parsed.changes,
+    detectedLanguage: (parsed.detectedLanguage || 'unknown') as LanguageCode,
+    usageMetadata: result.usage,
+  };
 };
 
 export const indexText = async (
   text: string,
   provider: Provider,
   apiKey?: string,
-  existingDomains?: string[]
-) => {
+  existingDomains?: string[],
+  model?: string
+): Promise<IndexerResponse> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  return p.services.indexText(text, apiKey, existingDomains);
+  const adapter = p.adapter();
+  return adapter.indexText(text, existingDomains, { provider, apiKey, model });
 };
 
 export const generateCollectionManifest = async (
   provider: Provider,
-  shards: { title: string; domain: string; tags: string[]; excerpt: string }[],
-  apiKey?: string
-) => {
+  shards: ShardSummary[],
+  apiKey?: string,
+  model?: string
+): Promise<ManifestResponse> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  return p.services.generateCollectionManifest(shards, apiKey);
+  const adapter = p.adapter();
+  return adapter.generateManifest(shards, { provider, apiKey, model });
 };
 
 export const validateApiKey = async (
@@ -68,5 +107,6 @@ export const validateApiKey = async (
 ): Promise<boolean> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  return p.services.validateApiKey(apiKey);
+  const adapter = p.adapter();
+  return adapter.validateApiKey(apiKey);
 };

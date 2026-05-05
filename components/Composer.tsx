@@ -56,7 +56,7 @@ interface ComposerProps {
   isSpeechSupported?: boolean;
   hasApiKey?: boolean;
   provider?: string;
-  
+
   // Diff Mode
   originalInput?: string | null;
   showDiff?: boolean;
@@ -494,7 +494,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                 <ToolbarButton
                   onClick={onShowSettings}
                   variant="subtle"
-                  title={provider === 'xai' ? 'Add an xAI API key' : 'Add a Gemini API key'}
+                  title="Add an API key"
                   className="flex items-center gap-2 px-3 py-2 rounded-full border border-white/[0.06]"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />

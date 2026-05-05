@@ -89,5 +89,4 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({
   );
 };
 
-// Keep regex export for backward compat
-export const API_KEY_REGEX = /^AIza[0-9A-Za-z-_]{35}$/;
+

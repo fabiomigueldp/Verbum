@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { Database, Loader2 } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
-import { estimateTokens } from '../../services/indexerService';
+import { estimateTokens } from '../../utils/tokens';
 
 // ============================================================================
 // INGESTION DECK COMPONENT

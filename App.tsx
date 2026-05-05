@@ -10,7 +10,7 @@ import { LandingPage } from './components/LandingPage';
 import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
 import { useCollectio } from './hooks/useCollectio';
 import { translateText, refineText, validateApiKey } from './services/aiRouter';
-import { getProvider, getDefaultProviderId, isValidProvider } from './services/providers';
+import { getProvider, getDefaultProviderId, isValidProvider, getAllProviders } from './services/providers';
 import type { ProviderConfig } from './services/providers';
 import { 
   TranslationRecord, 
@@ -22,7 +22,6 @@ import {
   LanguageConfig,
   LanguageCode,
   ProviderOption,
-  XAI_MODEL_ID
 } from './types';
 import { calculateCostNano } from './utils/pricing';
 
@@ -127,12 +126,13 @@ const App: React.FC = () => {
   const resolveApiKey = useCallback((): string => {
     const savedKey = apiKeys[provider]?.trim() || '';
     if (savedKey) return savedKey;
-    // Fallback to env
-    if (provider === 'gemini') {
-      return (process.env.GEMINI_API_KEY || process.env.API_KEY || '');
-    }
-    if (provider === 'xai') {
-      return (process.env.XAI_API_KEY || '');
+    // Fallback to env keys from registry
+    const p = getProvider(provider);
+    if (p) {
+      for (const envKey of p.envKeys) {
+        const val = process.env[envKey];
+        if (val) return val;
+      }
     }
     return '';
   }, [apiKeys, provider]);
@@ -141,7 +141,7 @@ const App: React.FC = () => {
   const hasApiKey = Boolean(resolvedApiKey);
 
   // -- Collectio Hook --
-  const collectio = useCollectio(resolvedApiKey, provider, provider === 'xai' ? XAI_MODEL_ID : model);
+  const collectio = useCollectio(resolvedApiKey, provider, model);
 
 
 
@@ -187,9 +187,14 @@ const App: React.FC = () => {
       setProvider(activeProvider);
 
       const keyToCheck = legacyKeys[activeProvider]?.trim() || '';
-      const envKey = activeProvider === 'xai'
-        ? (process.env.XAI_API_KEY || '')
-        : (process.env.GEMINI_API_KEY || process.env.API_KEY || '');
+      let envKey = '';
+      const p = getProvider(activeProvider);
+      if (p) {
+        for (const envName of p.envKeys) {
+          const val = process.env[envName];
+          if (val) { envKey = val; break; }
+        }
+      }
 
       const candidateKey = keyToCheck || envKey;
 
@@ -233,17 +238,15 @@ const App: React.FC = () => {
     }
 
     const savedModel = localStorage.getItem('verbum_model');
-    const allowedModels = [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-pro',
-      'gemini-2.5-flash-lite-preview-09-2025',
-      'gemini-2.0-flash-lite',
-      'gemini-3-flash-preview',
-      XAI_MODEL_ID,
-    ];
-    if (savedModel && allowedModels.includes(savedModel)) {
-      setModel(savedModel);
+    if (savedModel) {
+      // Validate against registry — check all providers for this model ID
+      const allProviders = getAllProviders();
+      const isValid = allProviders.some((p) =>
+        p.models.some((m) => m.id === savedModel)
+      );
+      if (isValid) {
+        setModel(savedModel);
+      }
     }
 
     const savedSessionStats = localStorage.getItem('verbum_session_stats');
@@ -314,10 +317,9 @@ const App: React.FC = () => {
 
   const updateSessionStats = (usageMetadata: UsageMetadata | undefined) => {
     if (!usageMetadata) return;
-    const modelId = provider === 'xai' ? XAI_MODEL_ID : model;
     const inputTokens = usageMetadata.promptTokens;
     const outputTokens = usageMetadata.candidatesTokens;
-    const costNano = calculateCostNano(modelId, inputTokens, outputTokens);
+    const costNano = calculateCostNano(model, inputTokens, outputTokens);
     const newTotalNano = sessionCostNanoRef.current + costNano;
     sessionCostNanoRef.current = newTotalNano;
     const exactCost = Number(newTotalNano) / 1_000_000_000;
@@ -610,9 +612,13 @@ const App: React.FC = () => {
           provider={provider}
           apiKeys={apiKeys}
           resolvedApiKey={resolvedApiKey}
-          isEnvKey={provider === 'xai'
-            ? Boolean(!apiKeys.xai && process.env.XAI_API_KEY)
-            : Boolean(!apiKeys.gemini && (process.env.GEMINI_API_KEY || process.env.API_KEY))}
+          isEnvKey={(() => {
+            const saved = apiKeys[provider]?.trim() || '';
+            if (saved) return false;
+            const p = getProvider(provider);
+            if (!p) return false;
+            return p.envKeys.some((envName: string) => Boolean(process.env[envName]));
+          })()}
           onProviderChange={handleProviderChange}
           onModelChange={setModel}
           onApiKeyChange={handleApiKeyChange}

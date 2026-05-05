@@ -4,7 +4,7 @@ import { GlassCard } from '../GlassCard';
 import { UsageSession } from '../../types';
 import { TokenCounter, CurrencyCounter } from '../RollingCounter';
 import { formatNanoDollars } from '../../utils/pricing';
-import { estimateReadTime } from '../../services/indexerService';
+import { estimateReadTime } from '../../utils/tokens';
 import { CollectionManifest, UndoState } from '../../hooks/useCollectio';
 
 // ============================================================================
