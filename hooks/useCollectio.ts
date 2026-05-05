@@ -435,7 +435,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
 
     try {
       // Pass existing domains for taxonomic consistency
-      const result = await indexText(trimmedContent, provider, apiKey, uniqueDomains, modelId);
+      const result = await indexText(trimmedContent, provider, apiKey, uniqueDomains, modelId, uuidv4());
       
       setAllShards(prev => 
         prev.map(s => s.id === newShard.id ? { 
@@ -643,7 +643,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
 
     try {
       // Pass existing domains for taxonomic consistency on retry
-      const result = await indexText(shard.content, provider, apiKey, uniqueDomains, modelId);
+      const result = await indexText(shard.content, provider, apiKey, uniqueDomains, modelId, uuidv4());
       
       setAllShards(prev => 
         prev.map(s => s.id === id ? { 
@@ -695,7 +695,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
         excerpt: s.content.slice(0, 500).replace(/\n/g, ' '),
       }));
 
-      const result = await generateCollectionManifest(provider, shardSummaries, apiKey, modelId);
+      const result = await generateCollectionManifest(provider, shardSummaries, apiKey, modelId, uuidv4());
       manifest = result.manifest;
       
       // Update stats if we got usage metadata

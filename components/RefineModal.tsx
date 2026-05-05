@@ -28,6 +28,7 @@ interface RefineModalProps {
   onApiKeyChange: (providerId: string, key: string) => void;
   sessionStats: UsageSession;
   onResetSessionStats: () => void;
+  onShowLogs?: () => void;
   anchorLanguage: Exclude<LanguageCode, 'unknown'>;
   targetLanguage: Exclude<LanguageCode, 'unknown'>;
   onAnchorLanguageChange: (lang: Exclude<LanguageCode, 'unknown'>) => void;
@@ -65,6 +66,7 @@ export const RefineModal = ({
   onApiKeyChange,
   sessionStats,
   onResetSessionStats,
+  onShowLogs,
   anchorLanguage,
   targetLanguage,
   onAnchorLanguageChange,
@@ -270,7 +272,7 @@ export const RefineModal = ({
                     </button>
                     {showTelemetry && (
                       <div className="animate-fade-in">
-                        <TokenTelemetry stats={sessionStats} onReset={onResetSessionStats} />
+                        <TokenTelemetry stats={sessionStats} onReset={onResetSessionStats} onShowLogs={onShowLogs} />
                       </div>
                     )}
                   </div>

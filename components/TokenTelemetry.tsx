@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, List } from 'lucide-react';
 import { UsageSession } from '../types';
 import { TokenCounter, CurrencyCounter } from './RollingCounter';
 import { formatNanoDollars } from '../utils/pricing';
@@ -7,23 +7,36 @@ import { formatNanoDollars } from '../utils/pricing';
 interface TokenTelemetryProps {
   stats: UsageSession;
   onReset: () => void;
+  onShowLogs?: () => void;
 }
 
-export const TokenTelemetry: React.FC<TokenTelemetryProps> = ({ stats, onReset }) => {
+export const TokenTelemetry: React.FC<TokenTelemetryProps> = ({ stats, onReset, onShowLogs }) => {
   return (
     <div className="bg-white/5 rounded-lg border border-white/5 p-3 mt-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-500 font-bold">
           Token Telemetry
         </span>
-        <button
-          onClick={onReset}
-          className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] text-neutral-600 hover:text-neutral-300 transition-colors"
-          title="Reset Counter"
-        >
-          <RotateCcw size={10} />
-          <span>Reset</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {onShowLogs && (
+            <button
+              onClick={onShowLogs}
+              className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] text-neutral-600 hover:text-neutral-300 transition-colors"
+              title="View Operation Log"
+            >
+              <List size={10} />
+              <span>Log</span>
+            </button>
+          )}
+          <button
+            onClick={onReset}
+            className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] text-neutral-600 hover:text-neutral-300 transition-colors"
+            title="Reset Counter"
+          >
+            <RotateCcw size={10} />
+            <span>Reset</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2">

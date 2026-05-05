@@ -96,7 +96,7 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         desc: 'Fixed model for xAI.',
         badge: 'Fixed',
         badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: { inputPer1M: 5.00, outputPer1M: 15.00 },
+        pricing: { inputPer1M: 0.20, outputPer1M: 0.50 },
       },
     ],
     keyPattern: /^xai-[A-Za-z0-9_-]+$/,

@@ -144,6 +144,8 @@ export interface AiRuntimeConfig {
   provider?: ProviderOption;
   model?: ModelOption;
   apiKey?: string;
+  /** Optional correlation ID for telemetry logging */
+  telemetryId?: string;
 }
 
 // ============================================================================
@@ -181,4 +183,34 @@ export interface ShardSummary {
   domain: string;
   tags: string[];
   excerpt: string;
+}
+
+// ============================================================================
+// TELEMETRY / REQUEST LOGGING
+// ============================================================================
+
+export type TelemetryOperation = 'translate' | 'refine' | 'index' | 'manifest';
+
+export type TelemetryErrorType = 'network' | 'validation' | 'api' | 'timeout' | 'unknown';
+
+export interface RequestLog {
+  id: string;
+  timestamp: number;
+  provider: string;
+  model: string;
+  operation: TelemetryOperation;
+  durationMs: number;
+  status: 'success' | 'error';
+  errorType?: TelemetryErrorType;
+  errorMessage?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostNano: string;
+  actualCostNano?: string;
+  inputLength: number;
+  outputLength?: number;
+  inputPreview: string;
+  outputPreview?: string;
+  tokensPerSecond: number;
 }

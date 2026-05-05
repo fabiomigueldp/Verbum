@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle, Database } from 'lucide-react';
+import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle, Database, Info } from 'lucide-react';
 import { TranslationRecord, SUPPORTED_LANGUAGES } from '../types';
 import { GlassCard } from './GlassCard';
 
@@ -64,6 +64,7 @@ interface TranslationItemProps {
   item: TranslationRecord;
   onDelete: (id: string) => void;
   onIngest?: (text: string) => void; // Bridge to Collectio
+  onShowInfo?: (id: string) => void; // Show telemetry details
   isNew?: boolean; // Flag for subtle arrival emphasis
 }
 
@@ -201,10 +202,11 @@ const Timestamp: React.FC<TimestampProps> = ({ timestamp, delay = 0 }) => {
 // Main Component: TranslationItem
 // Cinematic content materialization with zero CLS
 // ============================================================================
-export const TranslationItem: React.FC<TranslationItemProps> = ({ 
-  item, 
+export const TranslationItem: React.FC<TranslationItemProps> = ({
+  item,
   onDelete,
   onIngest,
+  onShowInfo,
   isNew = false,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -345,7 +347,16 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </ActionButton>
-              
+
+              {onShowInfo && (
+                <ActionButton
+                  onClick={() => onShowInfo(item.id)}
+                  title="Operation Details"
+                >
+                  <Info size={14} />
+                </ActionButton>
+              )}
+
               {/* Bridge to Collectio */}
               {onIngest && (
                 <ActionButton

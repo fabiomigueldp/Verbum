@@ -10,6 +10,9 @@ import { LandingPage } from './components/LandingPage';
 import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
 import { useCollectio } from './hooks/useCollectio';
 import { translateText, refineText, validateApiKey } from './services/aiRouter';
+import { OperationDetailModal } from './components/OperationDetailModal';
+import { RequestLogViewer } from './components/RequestLogViewer';
+import { getRequestLogById } from './services/core/telemetry';
 import { getProvider, getDefaultProviderId, isValidProvider, getAllProviders } from './services/providers';
 import type { ProviderConfig } from './services/providers';
 import { 
@@ -110,6 +113,10 @@ const App: React.FC = () => {
 
   // -- Skeleton --
   const [estimatedLength, setEstimatedLength] = useState<number>(0);
+
+  // -- Telemetry / Request Logs --
+  const [showLogViewer, setShowLogViewer] = useState(false);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerRef>(null);
@@ -373,10 +380,9 @@ const App: React.FC = () => {
         });
       }
 
-      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider });
-      updateSessionStats(result.usageMetadata);
-
       const newId = uuidv4();
+      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider, telemetryId: newId });
+      updateSessionStats(result.usageMetadata);
       const newRecord: TranslationRecord = {
         id: newId,
         original: input.trim(),
@@ -624,6 +630,7 @@ const App: React.FC = () => {
           onApiKeyChange={handleApiKeyChange}
           sessionStats={sessionStats}
           onResetSessionStats={resetSessionStats}
+          onShowLogs={() => { setShowSettings(false); setShowLogViewer(true); }}
           anchorLanguage={anchorLanguage}
           targetLanguage={targetLanguage}
           onAnchorLanguageChange={setAnchorLanguage}
@@ -634,6 +641,42 @@ const App: React.FC = () => {
           onClose={() => { setShowSettings(false); setSettingsFocus(null); }}
           initialFocus={settingsFocus}
         />
+      )}
+
+      {/* Operation Detail Modal */}
+      {selectedLogId && (
+        <OperationDetailModal
+          log={(() => {
+            const log = getRequestLogById(selectedLogId);
+            if (!log) {
+              // Fallback: create a minimal log if not found
+              return {
+                id: selectedLogId,
+                timestamp: Date.now(),
+                provider: provider,
+                model: model,
+                operation: 'translate',
+                durationMs: 0,
+                status: 'error' as const,
+                errorMessage: 'Log not found — may have been cleared or expired.',
+                inputTokens: 0,
+                outputTokens: 0,
+                totalTokens: 0,
+                estimatedCostNano: '0',
+                inputLength: 0,
+                inputPreview: '',
+                tokensPerSecond: 0,
+              };
+            }
+            return log;
+          })()}
+          onClose={() => setSelectedLogId(null)}
+        />
+      )}
+
+      {/* Request Log Viewer */}
+      {showLogViewer && (
+        <RequestLogViewer onClose={() => setShowLogViewer(false)} />
       )}
 
       {/* Mode Toggle — hidden when Settings is open */}
@@ -744,6 +787,7 @@ const App: React.FC = () => {
                     item={item}
                     onDelete={deleteItem}
                     onIngest={collectio.ingest}
+                    onShowInfo={setSelectedLogId}
                     isNew={item.id === newItemId}
                   />
                 ))}
