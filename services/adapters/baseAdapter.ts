@@ -21,7 +21,8 @@ export interface ProviderAdapter {
     langConfig: LanguageConfig,
     refinementInstruction: string | undefined,
     contextHistory: ContextMessage[] | undefined,
-    config: AiRuntimeConfig
+    config: AiRuntimeConfig,
+    glossaryInstruction?: string
   ): Promise<NormalizedResponse>;
 
   refineText(

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Copy, Check, Eye, EyeOff, Volume2, Trash2, StopCircle, Database, Info } from 'lucide-react';
-import { TranslationRecord, SUPPORTED_LANGUAGES } from '../types';
+import { TranslationRecord, SUPPORTED_LANGUAGES, GlossaryCompliance } from '../types';
 import { GlassCard } from './GlassCard';
 
 // ============================================================================
@@ -66,6 +66,7 @@ interface TranslationItemProps {
   onIngest?: (text: string) => void; // Bridge to Collectio
   onShowInfo?: (id: string) => void; // Show telemetry details
   isNew?: boolean; // Flag for subtle arrival emphasis
+  glossaryCompliance?: GlossaryCompliance;
 }
 
 // ============================================================================
@@ -132,9 +133,11 @@ interface LanguageChipProps {
   sourceLang: string;
   targetLang: string;
   delay?: number;
+  hasViolation?: boolean;
+  violationTitle?: string;
 }
 
-const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, targetLang, delay = 0 }) => {
+const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, targetLang, delay = 0, hasViolation, violationTitle }) => {
   // Format: SOURCE → TARGET (uppercase codes)
   const sourceCode = sourceLang === 'unknown' ? '??' : sourceLang.toUpperCase();
   const targetCode = targetLang.toUpperCase();
@@ -142,16 +145,17 @@ const LanguageChip: React.FC<LanguageChipProps> = ({ sourceLang, targetLang, del
   
   return (
     <span 
-      className="
+      className={`
         inline-flex items-center justify-center
         h-[22px] min-w-[80px] px-2
         text-[10px] font-semibold tracking-[0.15em] uppercase
         text-neutral-400
         bg-white/[0.02]
-        border border-white/[0.08]
         rounded-md
         select-none
-      "
+        ${hasViolation ? 'border border-dashed border-white/[0.08]' : 'border border-white/[0.08]'}
+      `}
+      title={hasViolation ? violationTitle : undefined}
       style={{
         animationDelay: `${delay}ms`,
         fontVariantNumeric: 'tabular-nums',
@@ -208,6 +212,7 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
   onIngest,
   onShowInfo,
   isNew = false,
+  glossaryCompliance,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -312,7 +317,13 @@ export const TranslationItem: React.FC<TranslationItemProps> = ({
           <div className="flex justify-between items-start mb-4">
             {/* Left: Language direction + timestamp */}
             <div className="flex items-center gap-3">
-              <LanguageChip sourceLang={item.sourceLang} targetLang={item.targetLang} delay={0} />
+              <LanguageChip
+                sourceLang={item.sourceLang}
+                targetLang={item.targetLang}
+                delay={0}
+                hasViolation={(glossaryCompliance?.suspectedViolations ?? 0) > 0}
+                violationTitle={`Glossary: ${glossaryCompliance?.matched ?? 0}/${glossaryCompliance?.applicable ?? 0} matched, ${glossaryCompliance?.suspectedViolations ?? 0} suspected violation${(glossaryCompliance?.suspectedViolations ?? 0) === 1 ? '' : 's'}`}
+              />
               <Timestamp timestamp={item.timestamp} delay={50} />
             </div>
             

@@ -33,6 +33,10 @@ export interface RequestLog {
   inputPreview: string;
   outputPreview?: string;
   tokensPerSecond: number;
+  glossaryTotalEntries?: number;
+  glossaryApplicable?: number;
+  glossaryMatched?: number;
+  glossarySuspectedViolations?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -71,6 +71,7 @@ export interface TranslationRecord {
   sourceLang: LanguageCode;
   /** Language the text was translated to */
   targetLang: Exclude<LanguageCode, 'unknown'>;
+  glossaryCompliance?: GlossaryCompliance;
 }
 
 // ============================================================================
@@ -93,6 +94,7 @@ export interface TranslationResponse {
   targetLanguageUsed: Exclude<LanguageCode, 'unknown'>;
   usageMetadata?: UsageMetadata;
   actualCostNano?: string;
+  glossaryCompliance?: GlossaryCompliance;
 }
 
 // ============================================================================
@@ -150,6 +152,8 @@ export interface AiRuntimeConfig {
   apiKey?: string;
   /** Optional correlation ID for telemetry logging */
   telemetryId?: string;
+  /** Whether the personal glossary is enabled for this translation */
+  glossaryEnabled?: boolean;
 }
 
 // ============================================================================
@@ -192,6 +196,30 @@ export interface ShardSummary {
 }
 
 // ============================================================================
+// GLOSSARY
+// ============================================================================
+
+export interface GlossaryEntry {
+  id: string;
+  pair: [Exclude<LanguageCode, 'unknown'>, Exclude<LanguageCode, 'unknown'>];
+  termA: string;
+  termB: string;
+  note?: string;
+}
+
+export interface Glossary {
+  entries: GlossaryEntry[];
+  version: number;
+}
+
+export interface GlossaryCompliance {
+  totalEntries: number;
+  applicable: number;
+  matched: number;
+  suspectedViolations: number;
+}
+
+// ============================================================================
 // TELEMETRY / REQUEST LOGGING
 // ============================================================================
 
@@ -222,4 +250,8 @@ export interface RequestLog {
   inputPreview: string;
   outputPreview?: string;
   tokensPerSecond: number;
+  glossaryTotalEntries?: number;
+  glossaryApplicable?: number;
+  glossaryMatched?: number;
+  glossarySuspectedViolations?: number;
 }

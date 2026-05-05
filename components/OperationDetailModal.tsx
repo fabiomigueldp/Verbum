@@ -166,6 +166,19 @@ export const OperationDetailModal: React.FC<OperationDetailModalProps> = ({ log,
               </div>
             )}
 
+            {/* Glossary */}
+            {!isError && log.glossaryTotalEntries !== undefined && log.glossaryTotalEntries > 0 && (
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">Glossary</span>
+                <span className="text-[12px] text-neutral-300 font-mono">
+                  {log.glossaryApplicable} applicable | {log.glossaryMatched} matched
+                  {(log.glossarySuspectedViolations ?? 0) > 0 && (
+                    <span className="text-neutral-500"> | {log.glossarySuspectedViolations} suspected</span>
+                  )}
+                </span>
+              </div>
+            )}
+
             {/* Preview */}
             {!isError && (log.inputPreview || log.outputPreview) && (
               <div className="space-y-2 pt-1">

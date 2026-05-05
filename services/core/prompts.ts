@@ -142,6 +142,45 @@ OUTPUT REQUIREMENTS:
 FORMAT: Output must be strictly JSON.
 `;
 
+export const buildGlossaryInstruction = (entries: { pair: [string, string]; termA: string; termB: string; note?: string }[]): string => {
+  if (entries.length === 0) return '';
+
+  const getLanguageName = (code: string): string => {
+    const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
+    return lang?.name || code.toUpperCase();
+  };
+
+  const langA = entries[0].pair[0];
+  const langB = entries[0].pair[1];
+  const nameA = getLanguageName(langA);
+  const nameB = getLanguageName(langB);
+
+  const lines: string[] = [
+    '',
+    '--- MANDATORY TERMINOLOGY ---',
+    'You MUST apply the following term mappings when translating.',
+    'These override all default corpus knowledge.',
+    '',
+    `${nameA} \u2194 ${nameB}:`,
+  ];
+
+  for (const entry of entries) {
+    const noteStr = entry.note ? `  [${entry.note}]` : '';
+    lines.push(`  "${entry.termA}" \u2194 "${entry.termB}"${noteStr}`);
+  }
+
+  lines.push(
+    '',
+    'Apply these mappings to the source term AND its semantic equivalents,',
+    'morphological variants, and closely related phrases.',
+    'Do not paraphrase or substitute outside these mappings.',
+    '--- END TERMINOLOGY ---',
+    ''
+  );
+
+  return lines.join('\n');
+};
+
 export const buildManifestUserPrompt = (shards: { title: string; domain: string; tags: string[]; excerpt: string }[]): string => {
   const itemsSummary = shards.map((s, i) =>
     `[${i + 1}] Title: "${s.title}" | Domain: ${s.domain} | Tags: ${s.tags.join(', ')} | Excerpt: "${s.excerpt}"`

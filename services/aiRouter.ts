@@ -9,6 +9,7 @@ import {
   ManifestResponse,
   ShardSummary,
   UsageMetadata,
+  GlossaryCompliance,
 } from '../types';
 import { getFirstModelId, getProvider, isValidModelForProvider } from './providers';
 import { parseAndValidate } from './core/validate';
@@ -16,6 +17,12 @@ import { TranslationSchema, RefinementSchema } from './core/schemas';
 import { logRequest, classifyErrorForTelemetry, preview } from './core/telemetry';
 import { calculateCostNano } from '../utils/pricing';
 import { NormalizedResponse } from './core/normalize';
+import {
+  loadGlossary,
+  resolveEntriesForPair,
+  buildGlossaryInstruction,
+  validateGlossaryCompliance,
+} from './core/glossary';
 
 export type Provider = string;
 
@@ -53,7 +60,8 @@ const createLogEntry = (
   startTime: number,
   result?: { usage?: UsageMetadata; text?: string; actualCostNano?: string },
   error?: unknown,
-  id?: string
+  id?: string,
+  glossaryCompliance?: GlossaryCompliance
 ) => {
   const durationMs = performance.now() - startTime;
   const usage = result?.usage;
@@ -91,6 +99,10 @@ const createLogEntry = (
       costSource: result?.actualCostNano ? 'provider_actual' : 'estimated',
       inputLength: inputText.length,
       inputPreview: preview(inputText),
+      glossaryTotalEntries: glossaryCompliance?.totalEntries,
+      glossaryApplicable: glossaryCompliance?.applicable,
+      glossaryMatched: glossaryCompliance?.matched,
+      glossarySuspectedViolations: glossaryCompliance?.suspectedViolations,
     });
     return;
   }
@@ -116,6 +128,10 @@ const createLogEntry = (
     outputLength: result?.text?.length ?? 0,
     inputPreview: hasPreview ? preview(inputText) : '',
     outputPreview: hasPreview && result?.text ? preview(result.text) : undefined,
+    glossaryTotalEntries: glossaryCompliance?.totalEntries,
+    glossaryApplicable: glossaryCompliance?.applicable,
+    glossaryMatched: glossaryCompliance?.matched,
+    glossarySuspectedViolations: glossaryCompliance?.suspectedViolations,
   });
 };
 
@@ -135,13 +151,22 @@ export const translateText = async (
   const start = performance.now();
   let result: NormalizedResponse | undefined;
 
+  // Glossary resolution
+  const glossaryEnabled = config?.glossaryEnabled !== false; // default true
+  const glossary = loadGlossary();
+  const glossaryEntries = glossaryEnabled
+    ? resolveEntriesForPair(glossary, langConfig.anchor, langConfig.target)
+    : [];
+  const glossaryInstruction = buildGlossaryInstruction(glossaryEntries);
+
   try {
     result = await adapter.translateText(
       text,
       langConfig,
       refinementInstruction,
       contextHistory,
-      runtime.config
+      runtime.config,
+      glossaryInstruction
     );
 
     const parsed = parseAndValidate(result.text, TranslationSchema) as {
@@ -150,14 +175,21 @@ export const translateText = async (
       targetLanguageUsed: string;
     };
 
-    createLogEntry(provider, model, 'translate', text, start, result, undefined, config?.telemetryId);
+    const detectedSourceLang = (parsed.detectedSourceLanguage || 'unknown') as LanguageCode;
+
+    const compliance = glossaryEntries.length > 0
+      ? validateGlossaryCompliance(text, parsed.translation, detectedSourceLang, glossaryEntries)
+      : undefined;
+
+    createLogEntry(provider, model, 'translate', text, start, result, undefined, config?.telemetryId, compliance);
 
     return {
       translation: parsed.translation,
-      detectedSourceLanguage: (parsed.detectedSourceLanguage || 'unknown') as LanguageCode,
+      detectedSourceLanguage: detectedSourceLang,
       targetLanguageUsed: (parsed.targetLanguageUsed || langConfig.target) as Exclude<LanguageCode, 'unknown'>,
       usageMetadata: result.usage,
       actualCostNano: result.actualCostNano,
+      glossaryCompliance: compliance,
     };
   } catch (error) {
     createLogEntry(provider, model, 'translate', text, start, result, error, config?.telemetryId);

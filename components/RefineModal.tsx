@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe, BookOpen } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { ProviderSelector } from './ProviderSelector';
 import { ModelSelector } from './ModelSelector';
 import { getProvider, getModelLabel, getAllProviders } from '../services/providers';
 import type { ProviderConfig } from '../services/providers';
-import { ToneOption, CustomTone, UsageSession, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
+import { ToneOption, CustomTone, UsageSession, LanguageCode, SUPPORTED_LANGUAGES, GlossaryEntry } from '../types';
 import { CustomToneModal } from './CustomToneModal';
 import { TokenTelemetry } from './TokenTelemetry';
 
@@ -36,6 +37,11 @@ interface RefineModalProps {
   onSelect: (tone: ToneOption) => void;
   onAddCustomTone: (tone: CustomTone) => void;
   onDeleteCustomTone: (id: string) => void;
+  glossaryEntries: GlossaryEntry[];
+  onAddGlossaryEntry: (entry: GlossaryEntry) => void;
+  onDeleteGlossaryEntry: (id: string) => void;
+  glossaryEnabled: boolean;
+  onToggleGlossary: () => void;
   onClose: () => void;
   initialFocus?: 'engine' | null;
 }
@@ -74,6 +80,11 @@ export const RefineModal = ({
   onSelect,
   onAddCustomTone,
   onDeleteCustomTone,
+  glossaryEntries,
+  onAddGlossaryEntry,
+  onDeleteGlossaryEntry,
+  glossaryEnabled,
+  onToggleGlossary,
   onClose,
   initialFocus,
 }: RefineModalProps) => {
@@ -82,6 +93,9 @@ export const RefineModal = ({
   const [showEngine, setShowEngine] = useState(initialFocus === 'engine');
   const [showLanguages, setShowLanguages] = useState(false);
   const [showTelemetry, setShowTelemetry] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
+  const [newTermA, setNewTermA] = useState('');
+  const [newTermB, setNewTermB] = useState('');
 
   const [localDepth, setLocalDepth] = useState(contextDepth);
 
@@ -94,6 +108,23 @@ export const RefineModal = ({
   const modelLabel = getModelLabel(provider, model);
   const hasResolvedApiKey = Boolean(resolvedApiKey);
   const apiKeyValue = apiKeys[provider] || '';
+
+  // Glossary: normalize current pair and filter entries
+  const normalizedCurrentPair: [string, string] = anchorLanguage < targetLanguage
+    ? [anchorLanguage, targetLanguage]
+    : [targetLanguage, anchorLanguage];
+
+  const currentPairEntries = useMemo(() => {
+    return glossaryEntries
+      .filter(e => e.pair[0] === normalizedCurrentPair[0] && e.pair[1] === normalizedCurrentPair[1])
+      .sort((a, b) => {
+        const aLeft = normalizedCurrentPair[0] === a.pair[0] ? a.termA : a.termB;
+        const bLeft = normalizedCurrentPair[0] === b.pair[0] ? b.termA : b.termB;
+        return aLeft.localeCompare(bLeft);
+      });
+  }, [glossaryEntries, normalizedCurrentPair]);
+
+  const otherPairsCount = glossaryEntries.length - currentPairEntries.length;
 
   // Auto-expand engine if opened from gate
   useEffect(() => {
@@ -473,6 +504,188 @@ export const RefineModal = ({
                   <p className="text-[10px] text-neutral-600 mt-2 font-light italic">
                     Includes up to {localDepth} previous messages to understand context.
                   </p>
+                </div>
+              )}
+            </div>
+
+            {/* ================================================================
+                TERMINOLOGY — Personal Glossary
+                ================================================================ */}
+            <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowGlossary(!showGlossary)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-neutral-900 text-white border border-white/10">
+                    <BookOpen size={16} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-white block">Terminology</span>
+                    <span className="text-xs text-neutral-500 font-light">
+                      {glossaryEnabled
+                        ? `${currentPairEntries.length} ${currentPairEntries.length === 1 ? 'entry' : 'entries'} for ${anchorLanguage.toUpperCase()}↔${targetLanguage.toUpperCase()}`
+                        : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Inline toggle */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleGlossary();
+                    }}
+                    className={`
+                      w-9 h-5 rounded-full transition-colors duration-300 relative flex-shrink-0
+                      ${glossaryEnabled ? 'bg-white' : 'bg-neutral-800'}
+                    `}
+                    title={glossaryEnabled ? 'Disable glossary' : 'Enable glossary'}
+                  >
+                    <div className={`
+                      absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-300
+                      ${glossaryEnabled ? 'translate-x-4 bg-black' : 'bg-neutral-500'}
+                    `} />
+                  </button>
+                  <div className="flex items-center gap-2 text-neutral-500">
+                    <span className="text-[10px] uppercase tracking-[0.2em]">Expand</span>
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform ${showGlossary ? 'rotate-180 text-white' : ''}`}
+                    />
+                  </div>
+                </div>
+              </button>
+
+              {showGlossary && (
+                <div className={`px-4 pt-3 pb-4 space-y-3 animate-fade-in border-t border-white/5 ${!glossaryEnabled ? 'opacity-40' : ''}`}>
+                  {/* Entries list */}
+                  {currentPairEntries.length > 0 && (
+                    <div
+                      className="space-y-0 overflow-y-auto custom-scrollbar"
+                      style={{ maxHeight: `${Math.min(currentPairEntries.length * 44 + 8, 180)}px` }}
+                    >
+                      {currentPairEntries.map((entry) => {
+                        const isForward = entry.pair[0] === anchorLanguage;
+                        const leftTerm = isForward ? entry.termA : entry.termB;
+                        const rightTerm = isForward ? entry.termB : entry.termA;
+                        return (
+                          <div
+                            key={entry.id}
+                            className="group/entry flex items-center justify-between py-2 border-b border-white/[0.04] last:border-b-0"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="text-[13px] text-white font-medium truncate">{leftTerm}</span>
+                              <span className="text-neutral-500 text-[10px] flex-shrink-0">↔</span>
+                              <span className="text-[13px] text-white font-medium truncate">{rightTerm}</span>
+                            </div>
+                            <button
+                              onClick={() => onDeleteGlossaryEntry(entry.id)}
+                              className="p-1.5 text-neutral-700 hover:text-red-400 opacity-0 group-hover/entry:opacity-100 transition-all flex-shrink-0"
+                              title="Remove"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {currentPairEntries.length === 0 && (
+                    <div className="py-3 text-center">
+                      <p className="text-[11px] text-neutral-600 font-light">
+                        No terms for {SUPPORTED_LANGUAGES.find(l => l.code === anchorLanguage)?.name} ↔ {SUPPORTED_LANGUAGES.find(l => l.code === targetLanguage)?.name}.
+                      </p>
+                      <p className="text-[10px] text-neutral-700 font-light mt-1">
+                        Add words you want consistently translated.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Ghost: terms in other pairs */}
+                  {otherPairsCount > 0 && (
+                    <div className="text-center">
+                      <span className="text-[10px] text-neutral-700">
+                        {otherPairsCount} {otherPairsCount === 1 ? 'term' : 'terms'} in other language {otherPairsCount === 1 ? 'pair' : 'pairs'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Add form */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      value={newTermA}
+                      onChange={(e) => setNewTermA(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newTermA.trim() && newTermB.trim()) {
+                          e.preventDefault();
+                          const pair: [Exclude<LanguageCode, 'unknown'>, Exclude<LanguageCode, 'unknown'>] =
+                            anchorLanguage < targetLanguage
+                              ? [anchorLanguage, targetLanguage]
+                              : [targetLanguage, anchorLanguage];
+                          onAddGlossaryEntry({
+                            id: uuidv4(),
+                            pair,
+                            termA: anchorLanguage < targetLanguage ? newTermA.trim() : newTermB.trim(),
+                            termB: anchorLanguage < targetLanguage ? newTermB.trim() : newTermA.trim(),
+                          });
+                          setNewTermA('');
+                          setNewTermB('');
+                        }
+                      }}
+                      placeholder={anchorLanguage.toUpperCase()}
+                      className="flex-1 min-w-0 bg-transparent border-b border-white/[0.08] text-[13px] text-white placeholder-neutral-500 focus:border-white/30 focus:outline-none py-2 px-1"
+                    />
+                    <span className="text-neutral-500 text-[10px] flex-shrink-0">↔</span>
+                    <input
+                      type="text"
+                      value={newTermB}
+                      onChange={(e) => setNewTermB(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newTermA.trim() && newTermB.trim()) {
+                          e.preventDefault();
+                          const pair: [Exclude<LanguageCode, 'unknown'>, Exclude<LanguageCode, 'unknown'>] =
+                            anchorLanguage < targetLanguage
+                              ? [anchorLanguage, targetLanguage]
+                              : [targetLanguage, anchorLanguage];
+                          onAddGlossaryEntry({
+                            id: uuidv4(),
+                            pair,
+                            termA: anchorLanguage < targetLanguage ? newTermA.trim() : newTermB.trim(),
+                            termB: anchorLanguage < targetLanguage ? newTermB.trim() : newTermA.trim(),
+                          });
+                          setNewTermA('');
+                          setNewTermB('');
+                        }
+                      }}
+                      placeholder={targetLanguage.toUpperCase()}
+                      className="flex-1 min-w-0 bg-transparent border-b border-white/[0.08] text-[13px] text-white placeholder-neutral-500 focus:border-white/30 focus:outline-none py-2 px-1"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!newTermA.trim() || !newTermB.trim()) return;
+                        const pair: [Exclude<LanguageCode, 'unknown'>, Exclude<LanguageCode, 'unknown'>] =
+                          anchorLanguage < targetLanguage
+                            ? [anchorLanguage, targetLanguage]
+                            : [targetLanguage, anchorLanguage];
+                        onAddGlossaryEntry({
+                          id: uuidv4(),
+                          pair,
+                          termA: anchorLanguage < targetLanguage ? newTermA.trim() : newTermB.trim(),
+                          termB: anchorLanguage < targetLanguage ? newTermB.trim() : newTermA.trim(),
+                        });
+                        setNewTermA('');
+                        setNewTermB('');
+                      }}
+                      disabled={!newTermA.trim() || !newTermB.trim()}
+                      className="w-8 h-8 rounded-full bg-white/[0.06] text-neutral-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

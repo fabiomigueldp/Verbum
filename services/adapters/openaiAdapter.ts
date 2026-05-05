@@ -83,9 +83,11 @@ export class OpenAIAdapter implements ProviderAdapter {
     langConfig: LanguageConfig,
     refinementInstruction?: string,
     contextHistory?: ContextMessage[],
-    config?: AiRuntimeConfig
+    config?: AiRuntimeConfig,
+    glossaryInstruction?: string
   ): Promise<NormalizedResponse> {
     let systemInstruction = buildTranslationInstruction(langConfig);
+    systemInstruction += glossaryInstruction || '';
     systemInstruction += buildContextBlock(contextHistory || []);
     if (refinementInstruction) {
       systemInstruction += buildToneOverride(refinementInstruction);

@@ -26,6 +26,7 @@ import {
   LanguageConfig,
   LanguageCode,
   ProviderOption,
+  GlossaryEntry,
 } from './types';
 import { calculateCostNano } from './utils/pricing';
 
@@ -105,6 +106,10 @@ const App: React.FC = () => {
   // -- Language --
   const [anchorLanguage, setAnchorLanguage] = useState<Exclude<LanguageCode, 'unknown'>>('pt');
   const [targetLanguage, setTargetLanguage] = useState<Exclude<LanguageCode, 'unknown'>>('en');
+
+  // -- Glossary --
+  const [glossaryEntries, setGlossaryEntries] = useState<GlossaryEntry[]>([]);
+  const [glossaryEnabled, setGlossaryEnabled] = useState(true);
 
   // -- Diff / Refine --
   const [originalInput, setOriginalInput] = useState<string | null>(null);
@@ -251,6 +256,27 @@ const App: React.FC = () => {
     if (savedAppMode === 'translation' || savedAppMode === 'collectio') {
       setAppMode(savedAppMode);
     }
+
+    const savedGlossary = localStorage.getItem('verbum_glossary_v1');
+    if (savedGlossary) {
+      try {
+        const parsed = JSON.parse(savedGlossary);
+        if (parsed && Array.isArray(parsed.entries)) {
+          setGlossaryEntries(parsed.entries);
+        }
+      } catch (e) {
+        console.error("Glossary parse error", e);
+      }
+    }
+
+    const savedGlossaryEnabled = localStorage.getItem('verbum_glossary_enabled');
+    if (savedGlossaryEnabled !== null) {
+      try {
+        setGlossaryEnabled(JSON.parse(savedGlossaryEnabled));
+      } catch {
+        setGlossaryEnabled(true);
+      }
+    }
   }, []);
 
   // -- Save Persistence --
@@ -283,6 +309,12 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
   useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
   useEffect(() => { localStorage.setItem('verbum_app_mode', appMode); }, [appMode]);
+  useEffect(() => {
+    localStorage.setItem('verbum_glossary_v1', JSON.stringify({ entries: glossaryEntries, version: 1 }));
+  }, [glossaryEntries]);
+  useEffect(() => {
+    localStorage.setItem('verbum_glossary_enabled', JSON.stringify(glossaryEnabled));
+  }, [glossaryEnabled]);
 
   // -- Language config --
   const languageConfig: LanguageConfig = {
@@ -366,7 +398,7 @@ const App: React.FC = () => {
       }
 
       const newId = uuidv4();
-      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider, telemetryId: newId });
+      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider, telemetryId: newId, glossaryEnabled });
       updateSessionStats(result.usageMetadata, result.actualCostNano);
       const newRecord: TranslationRecord = {
         id: newId,
@@ -375,6 +407,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
         sourceLang: result.detectedSourceLanguage,
         targetLang: result.targetLanguageUsed,
+        glossaryCompliance: result.glossaryCompliance,
       };
 
       if (skeletonTimerRef.current) {
@@ -482,6 +515,18 @@ const App: React.FC = () => {
     setCustomTones(prev => prev.filter(t => t.id !== id));
     if (tone === id) setTone('standard');
   };
+
+  const handleAddGlossaryEntry = useCallback((entry: GlossaryEntry) => {
+    setGlossaryEntries(prev => [entry, ...prev]);
+  }, []);
+
+  const handleDeleteGlossaryEntry = useCallback((id: string) => {
+    setGlossaryEntries(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const handleToggleGlossary = useCallback(() => {
+    setGlossaryEnabled(prev => !prev);
+  }, []);
 
   const handleProviderChange = useCallback((nextProvider: string) => {
     setProvider(nextProvider);
@@ -621,6 +666,11 @@ const App: React.FC = () => {
           onSelect={setTone}
           onAddCustomTone={handleAddCustomTone}
           onDeleteCustomTone={handleDeleteCustomTone}
+          glossaryEntries={glossaryEntries}
+          onAddGlossaryEntry={handleAddGlossaryEntry}
+          onDeleteGlossaryEntry={handleDeleteGlossaryEntry}
+          glossaryEnabled={glossaryEnabled}
+          onToggleGlossary={handleToggleGlossary}
           onClose={() => { setShowSettings(false); setSettingsFocus(null); }}
           initialFocus={settingsFocus}
         />
@@ -772,6 +822,7 @@ const App: React.FC = () => {
                     onIngest={collectio.ingest}
                     onShowInfo={setSelectedLogId}
                     isNew={item.id === newItemId}
+                    glossaryCompliance={item.glossaryCompliance}
                   />
                 ))}
               </div>
