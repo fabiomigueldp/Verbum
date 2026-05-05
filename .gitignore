@@ -27,6 +27,7 @@ scanner.py
 nul
 
 # Editor directories and files
+AGENTS.md
 .agent/*
 .vscode/*
 !.vscode/extensions.json
