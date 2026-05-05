@@ -1,7 +1,0 @@
-{
-  "name": "Verbum",
-  "description": "Neural translation interface for executive communication. Smart Pivot architecture supporting 15+ languages with intelligent anchor/target routing, tone refinement, and local-first privacy. Zero server persistence.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
