@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Download, Trash2, X, ChevronDown, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Download, Trash2, X, ChevronDown, AlertTriangle, BarChart3, DollarSign, Calendar } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { SimpleDropdown } from './SimpleDropdown';
 import { RequestLog } from '../types';
@@ -9,6 +9,8 @@ import {
   clearRequestLogs,
   exportRequestLogs,
   getRequestStats,
+  getCostsByProvider,
+  getCostHistory,
 } from '../services/core/telemetry';
 
 interface RequestLogViewerProps {
@@ -27,7 +29,8 @@ const formatDuration = (ms: number): string => {
 
 type FilterOp = 'all' | 'translate' | 'refine' | 'index' | 'manifest';
 type FilterStatus = 'all' | 'success' | 'error';
-type ViewMode = 'list' | 'performance';
+type FilterProvider = 'all' | string;
+type ViewMode = 'list' | 'performance' | 'costs';
 
 const OP_OPTIONS = [
   { value: 'all' as FilterOp, label: 'All Operations' },
@@ -59,19 +62,31 @@ interface ModelPerformance {
 export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) => {
   const [filterOp, setFilterOp] = useState<FilterOp>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const logs = useMemo(() => getRequestLogs(), []);
   const stats = useMemo(() => getRequestStats(), [logs]);
 
+  const providerOptions = useMemo(() => {
+    const providers = new Set<string>();
+    for (const log of logs) providers.add(log.provider);
+    const sorted = Array.from(providers).sort();
+    return [
+      { value: 'all' as FilterProvider, label: 'All Providers' },
+      ...sorted.map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) })),
+    ];
+  }, [logs]);
+
   const filtered = useMemo(() => {
     return logs.filter((log) => {
       if (filterOp !== 'all' && log.operation !== filterOp) return false;
       if (filterStatus !== 'all' && log.status !== filterStatus) return false;
+      if (filterProvider !== 'all' && log.provider !== filterProvider) return false;
       return true;
     });
-  }, [logs, filterOp, filterStatus]);
+  }, [logs, filterOp, filterStatus, filterProvider]);
 
   // Performance summary grouped by model
   const performanceData = useMemo((): ModelPerformance[] => {
@@ -87,7 +102,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
       totalTokens: number;
     }>();
 
-    for (const log of logs) {
+    for (const log of filtered) {
       if (log.status !== 'success') continue;
       const key = log.model; // Group by model ID only
       const existing = map.get(key);
@@ -115,7 +130,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
     }
 
     // Count errors separately
-    for (const log of logs) {
+    for (const log of filtered) {
       if (log.status === 'error') {
         const key = log.model;
         const existing = map.get(key);
@@ -149,7 +164,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
     }
 
     return result.sort((a, b) => b.calls - a.calls);
-  }, [logs]);
+  }, [filtered]);
 
   const handleExport = () => {
     const blob = new Blob([exportRequestLogs()], { type: 'application/json' });
@@ -241,6 +256,20 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
               <BarChart3 size={10} />
               Performance
             </button>
+            <button
+              onClick={() => setViewMode('costs')}
+              className={`
+                px-3 py-1.5 rounded-md text-[10px] uppercase tracking-[0.15em] font-medium
+                transition-all duration-200 flex items-center gap-1.5
+                ${viewMode === 'costs'
+                  ? 'bg-white/[0.08] text-white'
+                  : 'text-neutral-500 hover:text-neutral-300'
+                }
+              `}
+            >
+              <DollarSign size={10} />
+              Costs
+            </button>
           </div>
 
           {/* Content Area — min-h-0 prevents flex overflow issues */}
@@ -324,6 +353,11 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                     value={filterStatus}
                     options={STATUS_OPTIONS}
                     onChange={(v) => setFilterStatus(v as FilterStatus)}
+                  />
+                  <SimpleDropdown
+                    value={filterProvider}
+                    options={providerOptions}
+                    onChange={(v) => setFilterProvider(v as FilterProvider)}
                   />
                   <span className="text-[10px] text-neutral-600 ml-auto">
                     {filtered.length} entries
@@ -433,9 +467,152 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                 </div>
               </div>
             )}
+            {/* Costs View */}
+            {viewMode === 'costs' && (
+              <div className="h-full overflow-y-auto custom-scrollbar">
+                <CostsView />
+              </div>
+            )}
           </div>
         </div>
       </GlassCard>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// COSTS SUB-COMPONENT
+// ---------------------------------------------------------------------------
+
+const CostsView: React.FC = () => {
+  const [period, setPeriod] = useState<7 | 30>(7);
+
+  const providerCosts = useMemo(() => getCostsByProvider(), []);
+  const history = useMemo(() => getCostHistory(period), [period]);
+
+  const totalCostNano = useMemo(() => {
+    return providerCosts.reduce((sum, p) => sum + p.costNano, 0n);
+  }, [providerCosts]);
+
+  const totalOps = useMemo(() => {
+    return providerCosts.reduce((sum, p) => sum + p.ops, 0);
+  }, [providerCosts]);
+
+  const maxDayCost = useMemo(() => {
+    if (history.length === 0) return 1;
+    const max = Math.max(...history.map((d) => Number(d.costNano)));
+    return max > 0 ? max : 1;
+  }, [history]);
+
+  return (
+    <div className="space-y-5">
+      {/* Period selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500 font-bold">Period</span>
+        <div className="flex items-center gap-1 bg-white/[0.03] rounded-lg p-1">
+          <button
+            onClick={() => setPeriod(7)}
+            className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-[0.1em] font-medium transition-all ${
+              period === 7 ? 'bg-white/[0.08] text-white' : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+          >
+            7 Days
+          </button>
+          <button
+            onClick={() => setPeriod(30)}
+            className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-[0.1em] font-medium transition-all ${
+              period === 30 ? 'bg-white/[0.08] text-white' : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+          >
+            30 Days
+          </button>
+        </div>
+      </div>
+
+      {/* Total summary */}
+      <div className="bg-white/[0.03] rounded-xl border border-white/[0.04] p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">Total Spent</span>
+            <span className="text-lg text-white font-mono tracking-tight">
+              ${formatNanoDollars(totalCostNano, 9)}
+            </span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500">Operations</span>
+            <span className="text-sm text-neutral-300 font-mono">{totalOps}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Daily history chart */}
+      {history.some((d) => d.costNano > 0n) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Calendar size={10} className="text-neutral-600" />
+            <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500 font-bold">Daily Spend</span>
+          </div>
+          <div className="flex items-end gap-[2px] h-24 bg-white/[0.02] rounded-lg border border-white/[0.04] p-3">
+            {history.map((day) => {
+              const heightPct = Math.max(4, (Number(day.costNano) / maxDayCost) * 100);
+              const hasData = day.costNano > 0n;
+              return (
+                <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group">
+                  <div
+                    className={`
+                      w-full rounded-sm transition-all duration-300
+                      ${hasData ? 'bg-white/[0.12] group-hover:bg-white/[0.2]' : 'bg-white/[0.03]'}
+                    `}
+                    style={{ height: `${heightPct}%` }}
+                    title={`${day.date}: $${formatNanoDollars(day.costNano, 9)} (${day.ops} ops)`}
+                  />
+                  <span className="text-[8px] text-neutral-600 font-mono">
+                    {day.date.slice(5)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Provider breakdown */}
+      <div className="space-y-2">
+        <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-500 font-bold block">
+          By Provider
+        </span>
+        {providerCosts.length === 0 ? (
+          <div className="text-center py-6 text-neutral-600 text-[12px]">No cost data yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {providerCosts.map((p) => {
+              const costNum = Number(p.costNano);
+              const totalNum = Number(totalCostNano);
+              const pct = totalNum > 0 ? Math.round((costNum / totalNum) * 100) : 0;
+              return (
+                <div key={p.provider} className="bg-white/[0.02] rounded-lg border border-white/[0.04] p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[12px] text-neutral-300 capitalize">{p.provider}</span>
+                    <span className="text-[12px] text-white font-mono">
+                      ${formatNanoDollars(p.costNano, 9)}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-white/[0.04] rounded-full overflow-hidden mb-2">
+                    <div
+                      className="h-full bg-white/[0.15] rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                    <span>{p.ops} ops · {p.inputTokens + p.outputTokens} tokens</span>
+                    <span>{pct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

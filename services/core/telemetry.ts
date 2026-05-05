@@ -194,4 +194,93 @@ export const getRequestStats = (): RequestStats => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// COST AGGREGATION
+// ---------------------------------------------------------------------------
+
+export interface ProviderCost {
+  provider: string;
+  ops: number;
+  errors: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costNano: bigint;
+}
+
+export const getCostsByProvider = (): ProviderCost[] => {
+  const logs = loadLogs();
+  const map = new Map<string, ProviderCost>();
+
+  for (const log of logs) {
+    const existing = map.get(log.provider);
+    const costNano = BigInt(log.estimatedCostNano || '0');
+    if (existing) {
+      existing.ops += 1;
+      existing.errors += log.status === 'error' ? 1 : 0;
+      existing.inputTokens += log.inputTokens;
+      existing.outputTokens += log.outputTokens;
+      existing.totalTokens += log.totalTokens;
+      existing.costNano += costNano;
+    } else {
+      map.set(log.provider, {
+        provider: log.provider,
+        ops: 1,
+        errors: log.status === 'error' ? 1 : 0,
+        inputTokens: log.inputTokens,
+        outputTokens: log.outputTokens,
+        totalTokens: log.totalTokens,
+        costNano,
+      });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const aCost = Number(a.costNano);
+    const bCost = Number(b.costNano);
+    return bCost - aCost;
+  });
+};
+
+export interface DailyCost {
+  date: string; // YYYY-MM-DD
+  costNano: bigint;
+  ops: number;
+}
+
+export const getCostHistory = (days: number): DailyCost[] => {
+  const logs = loadLogs();
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const filtered = logs.filter((l) => l.timestamp >= cutoff);
+
+  const map = new Map<string, { costNano: bigint; ops: number }>();
+
+  for (const log of filtered) {
+    const date = new Date(log.timestamp).toISOString().slice(0, 10);
+    const existing = map.get(date);
+    const costNano = BigInt(log.estimatedCostNano || '0');
+    if (existing) {
+      existing.costNano += costNano;
+      existing.ops += 1;
+    } else {
+      map.set(date, { costNano, ops: 1 });
+    }
+  }
+
+  // Fill in missing days with zero
+  const result: DailyCost[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    const date = d.toISOString().slice(0, 10);
+    const entry = map.get(date);
+    result.push({
+      date,
+      costNano: entry?.costNano ?? 0n,
+      ops: entry?.ops ?? 0,
+    });
+  }
+
+  return result;
+};
+
 
