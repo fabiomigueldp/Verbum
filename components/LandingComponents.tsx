@@ -1,9 +1,6 @@
 import React, { useState, useEffect, memo, useRef, useCallback, useMemo } from 'react';
 import { 
   ArrowRight, 
-  Globe, 
-  Shield, 
-  GitCompareArrows, 
   Sparkles,
   Lock,
   Database,
@@ -298,7 +295,7 @@ export const LatencyCounter = memo(() => {
       <div className="mt-3 flex items-center gap-2">
         <Zap size={12} className="text-neutral-500" />
         <span className="text-[10px] tracking-[0.15em] uppercase text-neutral-500">
-          Inference Latency
+          Sub-Second Results
         </span>
       </div>
       
@@ -475,18 +472,18 @@ SmartPivotAnimation.displayName = 'SmartPivotAnimation';
 // ============================================================================
 const USE_CASES = [
   {
-    id: 'email',
+    id: 'executive-email',
     icon: Mail,
-    title: 'Email Communication',
+    title: 'Executive Email',
     preview: {
       before: "hey, just wanted to check if you got my last message about the budget",
       after: "I wanted to follow up regarding my previous correspondence concerning the budget allocation."
     }
   },
   {
-    id: 'docs',
+    id: 'technical-docs',
     icon: FileText,
-    title: 'Technical Documentation',
+    title: 'Technical Docs',
     preview: {
       before: "this function takes a string and returns the processed result",
       after: "This method accepts a string parameter and returns the processed output upon successful execution."
@@ -495,10 +492,28 @@ const USE_CASES = [
   {
     id: 'legal',
     icon: Scale,
-    title: 'Legal Correspondence',
+    title: 'Legal Review',
     preview: {
       before: "we need to talk about the contract terms before signing",
       after: "Prior to execution, we must convene to discuss the contractual provisions in detail."
+    }
+  },
+  {
+    id: 'glossary-powered',
+    icon: Database,
+    title: 'Terminology Control',
+    preview: {
+      before: "Vamos alinhar o prazo do contrato com o orçamento.",
+      after: "Let's align on the agreement deadline with the budget."
+    }
+  },
+  {
+    id: 'diplomatic',
+    icon: Quote,
+    title: 'Diplomatic Tone',
+    preview: {
+      before: "your proposal doesnt work and we need something better",
+      after: "While we appreciate your proposal, we believe there may be room for alternative approaches that better align with our objectives."
     }
   }
 ];
@@ -691,10 +706,11 @@ export const CreatorStatement = memo(() => {
             mb-8
             max-w-3xl mx-auto
           `}>
-            "I communicate globally in professional contexts daily. 
-            While fluent in English, I never felt fully confident in high-stakes correspondence. 
-            Existing tools required constant context-setting. 
-            <span className="text-white"> Verbum exists because precision in communication shouldn't require explanation.</span>"
+            "I built Verbum because I got tired of not trusting my translations. 
+            Every day I needed to translate emails, documents, messages. 
+            Google Translate got the terminology wrong. 
+            ChatGPT made me write prompts, wait, adjust, wait again. 
+            <span className="text-white"> I wanted a tool that simply worked. So I built it.</span>"
           </p>
           
           {/* Attribution */}
@@ -710,7 +726,7 @@ export const CreatorStatement = memo(() => {
               text-[10px] tracking-[0.2em] uppercase
               text-neutral-600
             ">
-              Creator & Engineer
+              Built for myself. Shared with those who need it.
             </span>
           </footer>
         </blockquote>
@@ -1132,6 +1148,319 @@ export const CTAButton = memo<{ onClick: () => void; children: React.ReactNode }
 ));
 
 CTAButton.displayName = 'CTAButton';
+
+// ============================================================================
+// COLLECTIO SECTION — Rebuilt
+// ============================================================================
+
+export const CollectioSection = memo(() => {
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => setIsVisible(true), 100);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const shards = [
+    { title: 'Authentication Module', domain: 'Software Engineering', tags: ['api', 'auth', 'security'] },
+    { title: 'Q3 Sales Analysis', domain: 'Business', tags: ['sales', 'quarter', 'report'] },
+    { title: 'Mediterranean Recipe', domain: 'Culinary', tags: ['food', 'recipe', 'mediterranean'] },
+  ];
+
+  return (
+    <section ref={ref} className="relative px-6 py-32 max-w-6xl mx-auto w-full">
+      {/* Section Header */}
+      <div className={`
+        text-center mb-20
+        transition-all duration-1000 ease-[${ANIMATION_EASING}]
+        ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+      `}>
+        <span className="
+          text-[10px] tracking-[0.4em] uppercase
+          text-neutral-600 font-medium
+          block mb-4
+        ">
+          Knowledge Management
+        </span>
+        <h2 className="
+          text-3xl sm:text-4xl
+          font-light
+          tracking-[-0.02em]
+          text-[#ededed]
+          mb-4
+        ">
+          Collectio
+        </h2>
+        <p className="
+          text-base text-neutral-500 font-light
+          max-w-xl mx-auto leading-relaxed
+        ">
+          Index, group, and compile text into structured documents.
+        </p>
+      </div>
+
+      {/* Two columns: Story + Visual */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start mb-16">
+        {/* Story */}
+        <div className={`
+          transition-all duration-1000 ease-[${ANIMATION_EASING}]
+          ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+        `} style={{ transitionDelay: '200ms' }}>
+          <p className="text-base text-neutral-400 font-light leading-relaxed mb-6">
+            Before code agents existed, I built a simple indexer to feed context to ChatGPT.
+            <span className="text-neutral-300"> Collectio is what that became.</span>
+          </p>
+
+          <div className="space-y-3">
+            {[
+              { verb: 'Ingest', desc: 'Paste or type any text fragment' },
+              { verb: 'Index', desc: 'AI extracts title, domain, tags, and abstract' },
+              { verb: 'Compile', desc: 'Group by domain, generate a structured document' },
+            ].map((item) => (
+              <div key={item.verb} className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-white/30 mt-2 shrink-0" />
+                <p className="text-sm text-neutral-500 font-light">
+                  <span className="text-neutral-300">{item.verb}</span> — {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Visual — KnowledgeLattice + CompilerHUD */}
+        <div className={`
+          transition-all duration-1000 ease-[${ANIMATION_EASING}]
+          ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+        `} style={{ transitionDelay: '400ms' }}>
+          <GlassCard isActive className="p-5">
+            {/* Domain group label */}
+            <div className="mb-3">
+              <span className="text-[10px] tracking-[0.15em] uppercase text-neutral-600 font-medium">
+                Software Engineering
+              </span>
+            </div>
+
+            {/* Shards */}
+            <div className="space-y-2 mb-4">
+              {shards.map((shard, i) => (
+                <div
+                  key={i}
+                  className="
+                    p-3 rounded-xl
+                    bg-white/[0.02] border border-white/[0.04]
+                    hover:bg-white/[0.04] hover:border-white/[0.08]
+                    transition-all duration-300
+                  "
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[12px] text-neutral-300 font-medium">{shard.title}</span>
+                    <span className="text-[9px] text-neutral-600 tracking-wide">{shard.domain}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {shard.tags.map(tag => (
+                      <span
+                        key={tag}
+                        className="
+                          text-[9px] text-neutral-500
+                          px-1.5 py-0.5 rounded-md
+                          bg-white/[0.03] border border-white/[0.04]
+                        "
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CompilerHUD bar */}
+            <div className="
+              flex items-center justify-between
+              px-4 py-3 rounded-xl
+              bg-white/[0.03] border border-white/[0.06]
+            ">
+              <div className="flex items-center gap-3 text-[10px] text-neutral-500">
+                <span>3 shards</span>
+                <span className="text-neutral-700">·</span>
+                <span>2.4k tokens</span>
+                <span className="text-neutral-700">·</span>
+                <span className="text-neutral-400">$0.002</span>
+              </div>
+              <span className="text-[10px] text-neutral-300 font-medium tracking-wide">Compile</span>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+
+      {/* Use cases row */}
+      <div className={`
+        grid grid-cols-1 sm:grid-cols-3 gap-4
+        transition-all duration-1000 ease-[${ANIMATION_EASING}]
+        ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+      `} style={{ transitionDelay: '600ms' }}>
+        {[
+          { title: 'Research', desc: 'Compile papers and findings into documents.' },
+          { title: 'Documentation', desc: 'Organize technical references by domain.' },
+          { title: 'Temporary Storage', desc: 'Save text you will need later, indexed.' },
+        ].map((item, i) => (
+          <GlassCard key={i} hoverEffect className="p-5">
+            <h4 className="text-sm font-medium text-neutral-300 mb-2">{item.title}</h4>
+            <p className="text-xs text-neutral-600 font-light leading-relaxed">{item.desc}</p>
+          </GlassCard>
+        ))}
+      </div>
+    </section>
+  );
+});
+
+CollectioSection.displayName = 'CollectioSection';
+
+// ============================================================================
+// GLOSSARY CARD — For bento grid (rebuilt)
+// ============================================================================
+
+export const GlossaryCard = memo(() => {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhase(prev => (prev + 1) % 3);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, []);
+
+  const terms = [
+    { source: 'prazo', target: 'deadline', active: phase === 0 },
+    { source: 'contrato', target: 'agreement', active: phase === 1 },
+    { source: 'alinhar', target: 'align', active: phase === 2 },
+  ];
+
+  return (
+    <div className="relative h-36 flex flex-col items-center justify-center px-3">
+      <div className="w-full space-y-2">
+        {terms.map((term, i) => (
+          <div
+            key={i}
+            className={`
+              flex items-center justify-between
+              px-4 py-2.5 rounded-lg
+              border transition-all duration-700 ease-[${ANIMATION_EASING}]
+              ${term.active
+                ? 'bg-white/[0.05] border-white/[0.12]'
+                : 'bg-transparent border-white/[0.03]'
+              }
+            `}
+          >
+            <span className={`
+              text-[13px] font-light tracking-wide
+              transition-colors duration-500
+              ${term.active ? 'text-white' : 'text-neutral-600'}
+            `}>
+              {term.source}
+            </span>
+            <span className={`
+              text-neutral-700 text-xs mx-3
+              transition-colors duration-500
+              ${term.active ? 'text-neutral-500' : 'text-neutral-800'}
+            `}>
+              →
+            </span>
+            <span className={`
+              text-[13px] font-light tracking-wide
+              transition-colors duration-500
+              ${term.active ? 'text-white' : 'text-neutral-600'}
+            `}>
+              {term.target}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+GlossaryCard.displayName = 'GlossaryCard';
+
+// ============================================================================
+// TONE CONTROL CARD — Mini diff animation for bento grid
+// ============================================================================
+
+export const ToneControlCard = memo(() => {
+  const [toneIndex, setToneIndex] = useState(0);
+
+  const tones = [
+    { label: 'Executive', input: 'i think we should meet', output: 'I propose we convene' },
+    { label: 'Concise', input: 'i think we should meet', output: "Let's meet." },
+    { label: 'Diplomatic', input: 'i think we should meet', output: 'I suggest we schedule a discussion' },
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setToneIndex(prev => (prev + 1) % tones.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const current = tones[toneIndex];
+
+  return (
+    <div className="relative h-36 flex flex-col items-center justify-center px-4">
+      {/* Tone badge */}
+      <div className="mb-4">
+        <span className="
+          px-3 py-1 rounded-full
+          text-[10px] tracking-[0.15em] uppercase font-medium
+          bg-white/[0.06] border border-white/[0.12] text-white
+          transition-all duration-500
+        ">
+          {current.label}
+        </span>
+      </div>
+
+      {/* Diff */}
+      <div className="w-full space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-red-400/60 font-mono shrink-0">−</span>
+          <span className="text-sm font-light text-neutral-500 line-through decoration-red-500/30 truncate">
+            {current.input}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-emerald-400/60 font-mono shrink-0">+</span>
+          <span className="text-sm font-light text-white bg-white/[0.06] rounded px-1.5 py-0.5 truncate">
+            {current.output}
+          </span>
+        </div>
+      </div>
+
+      {/* Indicator dots */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+        {tones.map((_, i) => (
+          <div
+            key={i}
+            className={`
+              w-1 h-1 rounded-full transition-all duration-500
+              ${i === toneIndex ? 'bg-white/60 scale-125' : 'bg-white/15'}
+            `}
+          />
+        ))}
+      </div>
+    </div>
+  );
+});
+
+ToneControlCard.displayName = 'ToneControlCard';
 
 // ============================================================================
 // GLOBAL KEYBOARD LISTENER

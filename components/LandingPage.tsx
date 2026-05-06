@@ -1,5 +1,5 @@
-import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
-import { Sparkles, Languages, Wand2, Globe2 } from 'lucide-react';
+import React, { useState, useEffect, memo, useRef } from 'react';
+import { Languages, Wand2, Globe2, Mic, BookOpen, Zap } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import {
   HUDHeader,
@@ -14,17 +14,18 @@ import {
   LegalModal,
   CTAButton,
   GlobalKeyListener,
-  ANIMATION_EASING,
-  TEXT_PRIMARY,
+  CollectioSection,
+  GlossaryCard,
+  ToneControlCard,
   type LegalModalType,
 } from './LandingComponents';
 
 // ============================================================================
-// OMNI-SHOWCASE SCENARIOS - Demonstrating Verbum's Full Capabilities
-// Each scenario showcases a different use case with diverse language pairs
+// OMNI-SHOWCASE SCENARIOS — Demonstrating Verbum's Full Capabilities
+// 16 scenarios covering translation, refinement, pivot, glossary, voice, diff
 // ============================================================================
 
-type ScenarioMode = 'translation' | 'refinement' | 'pivot';
+type ScenarioMode = 'translation' | 'refinement' | 'pivot' | 'glossary' | 'voice' | 'diff';
 
 interface Scenario {
   id: string;
@@ -65,7 +66,7 @@ const SCENARIOS: Scenario[] = [
     input: 'Die Systemarchitektur muss vor dem nächsten Sprint überarbeitet werden.',
     output: 'The system architecture must be revised before the next sprint.',
   },
-  
+
   // === TONE REFINEMENT ===
   {
     id: 'en-en-executive',
@@ -150,17 +151,54 @@ const SCENARIOS: Scenario[] = [
     input: '다음 주 협력 회의 일정을 조율해 주세요.',
     output: 'Please coordinate the schedule for next week\'s collaboration meeting.',
   },
+
+  // === NEW SCENARIOS ===
+  {
+    id: 'pt-en-glossary',
+    mode: 'glossary',
+    label: 'GLOSSARY POWERED',
+    badge: 'PT → EN',
+    icon: BookOpen,
+    input: 'Vamos alinhar o prazo do contrato.',
+    output: "Let's align on the agreement deadline.",
+  },
+  {
+    id: 'en-en-diff',
+    mode: 'diff',
+    label: 'VISUAL DIFF',
+    badge: 'CONCISE',
+    icon: Zap,
+    input: 'I wanted to reach out to you to let you know that we have decided to move forward with the project.',
+    output: "We're proceeding with the project.",
+  },
+  {
+    id: 'en-en-voice',
+    mode: 'voice',
+    label: 'VOICE INPUT',
+    badge: 'EN',
+    icon: Mic,
+    input: 'Please review the proposal by Friday.',
+    output: 'Please review the proposal by Friday.',
+  },
+  {
+    id: 'he-en-pivot',
+    mode: 'pivot',
+    label: 'GLOBAL PIVOT',
+    badge: 'HE → EN',
+    icon: Globe2,
+    input: 'נשמח לקבל את המשוב שלך',
+    output: 'We would be happy to receive your feedback.',
+  },
 ];
 
 // Timing constants (in ms)
-const PHASE_INPUT = 4000;      // Hold input for reading
-const PHASE_PROCESSING = 1500; // Processing animation
-const PHASE_OUTPUT = 5000;     // Hold output for reading
-const CYCLE_DURATION = PHASE_INPUT + PHASE_PROCESSING + PHASE_OUTPUT; // ~10.5s
+const PHASE_INPUT = 4000;
+const PHASE_PROCESSING = 1500;
+const PHASE_OUTPUT = 5000;
+const CYCLE_DURATION = PHASE_INPUT + PHASE_PROCESSING + PHASE_OUTPUT;
 
 // ============================================================================
-// OMNI-SHOWCASE COMPONENT - The "Verbum Brain" Demo
-// Fixed-height container with cinematic cross-fade transitions
+// OMNI-SHOWCASE COMPONENT
 // ============================================================================
 
 type Phase = 'input' | 'processing' | 'output';
@@ -171,30 +209,29 @@ const OmniShowcase = memo(() => {
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
-  
+
   const scenario = SCENARIOS[scenarioIndex];
   const Icon = scenario.icon;
 
-  // Progress bar animation (smooth 60fps)
   useEffect(() => {
     const startTime = Date.now();
-    
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const newProgress = Math.min((elapsed / CYCLE_DURATION) * 100, 100);
-      
+
       if (Math.abs(newProgress - progressRef.current) > 0.5) {
         progressRef.current = newProgress;
         setProgress(newProgress);
       }
-      
+
       if (elapsed < CYCLE_DURATION) {
         animationFrameRef.current = requestAnimationFrame(animate);
       }
     };
-    
+
     animationFrameRef.current = requestAnimationFrame(animate);
-    
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -202,19 +239,17 @@ const OmniShowcase = memo(() => {
     };
   }, [scenarioIndex]);
 
-  // Phase state machine
   useEffect(() => {
     setPhase('input');
     setProgress(0);
     progressRef.current = 0;
-    
+
     const timer1 = setTimeout(() => setPhase('processing'), PHASE_INPUT);
     const timer2 = setTimeout(() => setPhase('output'), PHASE_INPUT + PHASE_PROCESSING);
     const timer3 = setTimeout(() => {
-      // Move to next scenario
       setScenarioIndex(prev => (prev + 1) % SCENARIOS.length);
     }, CYCLE_DURATION);
-    
+
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -222,36 +257,30 @@ const OmniShowcase = memo(() => {
     };
   }, [scenarioIndex]);
 
-  // Detect RTL for input text
   const isInputRTL = /[\u0600-\u06FF\u0590-\u05FF]/.test(scenario.input);
 
   return (
     <div className="relative">
-      {/* ================================================================
-          MODE INDICATOR - Dynamic badge showing current operation
-          ================================================================ */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          {/* Mode Label */}
           <div className={`
             flex items-center gap-2
             px-3 py-1.5 rounded-full
             text-[10px] tracking-[0.2em] uppercase font-medium
             transition-all duration-700 ease-in-out
-            ${phase === 'output' 
-              ? 'bg-white/[0.08] text-white border border-white/[0.12]' 
+            ${phase === 'output'
+              ? 'bg-white/[0.08] text-white border border-white/[0.12]'
               : 'bg-white/[0.04] text-neutral-500 border border-white/[0.06]'
             }
           `}>
             <Icon size={12} className={`
-                transition-all duration-500
-                ${phase === 'processing' ? 'animate-pulse' : ''}
-                ${phase === 'output' ? 'text-white' : 'text-neutral-500'}
-              `} />
+              transition-all duration-500
+              ${phase === 'processing' ? 'animate-pulse' : ''}
+              ${phase === 'output' ? 'text-white' : 'text-neutral-500'}
+            `} />
             <span>{scenario.label}</span>
           </div>
-          
-          {/* Language/Mode Badge */}
+
           <div className={`
             px-2.5 py-1 rounded-md
             text-[9px] tracking-[0.15em] uppercase font-semibold
@@ -263,28 +292,22 @@ const OmniShowcase = memo(() => {
             {scenario.badge}
           </div>
         </div>
-        
-        {/* Cycle Counter (subtle) */}
+
         <div className="text-[9px] tracking-[0.15em] text-neutral-700 font-mono tabular-nums">
           {String(scenarioIndex + 1).padStart(2, '0')}/{String(SCENARIOS.length).padStart(2, '0')}
         </div>
       </div>
-      
-      {/* ================================================================
-          TEXT RESERVOIR - Fixed height container with absolute positioning
-          Prevents layout shift during transitions
-          ================================================================ */}
+
       <div className="relative min-h-[140px] sm:min-h-[120px]">
-        {/* Input Text Layer */}
-        <p 
+        <p
           dir={isInputRTL ? 'rtl' : 'ltr'}
           className={`
             absolute inset-0
-            text-base sm:text-lg md:text-xl 
+            text-base sm:text-lg md:text-xl
             font-light leading-relaxed tracking-tight
             transition-all duration-1000 ease-in-out
-            ${phase === 'input' 
-              ? 'opacity-100 blur-0 translate-y-0' 
+            ${phase === 'input'
+              ? 'opacity-100 blur-0 translate-y-0'
               : 'opacity-0 blur-[3px] -translate-y-2'
             }
             text-neutral-400
@@ -293,34 +316,31 @@ const OmniShowcase = memo(() => {
         >
           {scenario.input}
         </p>
-        
-        {/* Output Text Layer */}
+
         <p className={`
           absolute inset-0
-          text-base sm:text-lg md:text-xl 
+          text-base sm:text-lg md:text-xl
           font-light leading-relaxed tracking-tight
           transition-all duration-1000 ease-in-out
-          ${phase === 'output' 
-            ? 'opacity-100 blur-0 translate-y-0' 
+          ${phase === 'output'
+            ? 'opacity-100 blur-0 translate-y-0'
             : 'opacity-0 blur-[3px] translate-y-2'
           }
           text-[#ededed]
         `}>
           {scenario.output}
         </p>
-        
-        {/* Processing State - Centered "Thinking" Animation */}
+
         <div className={`
-          absolute inset-0 
+          absolute inset-0
           flex items-center justify-center
           transition-all duration-500 ease-in-out
           ${phase === 'processing' ? 'opacity-100' : 'opacity-0 pointer-events-none'}
         `}>
           <div className="flex items-center gap-4">
-            {/* Pulsing dots with stagger */}
             <div className="flex items-center gap-1.5">
               {[0, 1, 2].map(i => (
-                <div 
+                <div
                   key={i}
                   className="w-1.5 h-1.5 rounded-full bg-white/40"
                   style={{
@@ -331,11 +351,18 @@ const OmniShowcase = memo(() => {
               ))}
             </div>
             <span className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 font-medium">
-              {scenario.mode === 'refinement' ? 'Refining' : 'Translating'}
+              {scenario.mode === 'refinement' || scenario.mode === 'diff'
+                ? 'Refining'
+                : scenario.mode === 'glossary'
+                  ? 'Applying Terms'
+                  : scenario.mode === 'voice'
+                    ? 'Transcribing'
+                    : 'Translating'
+              }
             </span>
             <div className="flex items-center gap-1.5">
               {[0, 1, 2].map(i => (
-                <div 
+                <div
                   key={i}
                   className="w-1.5 h-1.5 rounded-full bg-white/40"
                   style={{
@@ -348,14 +375,11 @@ const OmniShowcase = memo(() => {
           </div>
         </div>
       </div>
-      
-      {/* ================================================================
-          PROGRESS BAR - Ultra-subtle timing indicator
-          ================================================================ */}
+
       <div className="mt-6 h-px bg-white/[0.04] rounded-full overflow-hidden">
-        <div 
+        <div
           className="h-full bg-gradient-to-r from-white/20 via-white/40 to-white/20 rounded-full transition-none"
-          style={{ 
+          style={{
             width: `${progress}%`,
             transition: 'width 100ms linear',
           }}
@@ -368,8 +392,9 @@ const OmniShowcase = memo(() => {
 OmniShowcase.displayName = 'OmniShowcase';
 
 // ============================================================================
-// BENTO CARD - Rich Visualization Container
+// BENTO CARD — Reusable
 // ============================================================================
+
 interface BentoCardProps {
   title: string;
   subtitle: string;
@@ -378,16 +403,16 @@ interface BentoCardProps {
   delay?: number;
 }
 
-const BentoCard = memo<BentoCardProps>(({ 
-  title, 
-  subtitle, 
-  children, 
+const BentoCard = memo<BentoCardProps>(({
+  title,
+  subtitle,
+  children,
   className = '',
-  delay = 0 
+  delay = 0
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -398,13 +423,13 @@ const BentoCard = memo<BentoCardProps>(({
       },
       { threshold: 0.2 }
     );
-    
+
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
   }, [delay]);
 
   return (
-    <div 
+    <div
       ref={ref}
       className={`
         transition-all duration-700
@@ -413,12 +438,10 @@ const BentoCard = memo<BentoCardProps>(({
       `}
     >
       <GlassCard hoverEffect className="h-full overflow-hidden">
-        {/* Visualization Area */}
         <div className="p-6 pb-2">
           {children}
         </div>
-        
-        {/* Text Content */}
+
         <div className="p-6 pt-4 border-t border-white/[0.04]">
           <h3 className="text-base font-medium text-[#ededed] tracking-tight mb-1">
             {title}
@@ -437,6 +460,7 @@ BentoCard.displayName = 'BentoCard';
 // ============================================================================
 // MAIN LANDING PAGE COMPONENT
 // ============================================================================
+
 interface LandingPageProps {
   onEnter: () => void;
 }
@@ -445,7 +469,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
   const [heroVisible, setHeroVisible] = useState(false);
   const [activeModal, setActiveModal] = useState<LegalModalType>(null);
   const heroRef = useRef<HTMLElement>(null);
-  
+
   useEffect(() => {
     const timer = setTimeout(() => setHeroVisible(true), 100);
     return () => clearTimeout(timer);
@@ -453,8 +477,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
 
   return (
     <div className="
-      min-h-screen 
-      flex flex-col 
+      min-h-screen
+      flex flex-col
       selection:bg-white/20 selection:text-white
       overflow-x-hidden
     ">
@@ -462,9 +486,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
       <HUDHeader onLaunch={onEnter} />
 
       {/* ================================================================
-          HERO SECTION - Cinematic & Commanding
+          HERO SECTION
           ================================================================ */}
-      <section 
+      <section
         ref={heroRef}
         className="
           relative
@@ -473,16 +497,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           px-6 py-20 pt-32
         "
       >
-        {/* Spotlight Effect */}
         <Spotlight containerRef={heroRef as React.RefObject<HTMLElement>} />
-        
-        {/* Ambient Light - Subtle radial gradient */}
+
         <div className="
-          absolute inset-0 
+          absolute inset-0
           bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(255,255,255,0.03),transparent)]
           pointer-events-none
         " />
-        
+
         {/* Hero Content */}
         <div className={`
           relative z-10
@@ -491,7 +513,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           transition-all duration-1000
           ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
         `}>
-          {/* Wordmark */}
           <div className="mb-8">
             <span className="
               text-[10px] tracking-[0.4em] uppercase
@@ -500,8 +521,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               Introducing
             </span>
           </div>
-          
-          {/* Main Headline */}
+
           <h1 className="
             text-5xl sm:text-6xl md:text-7xl
             font-light
@@ -510,12 +530,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             mb-8
             leading-[1]
           ">
-            Translation for the
+            Translate with
             <br />
-            <span className="font-normal text-white">Executive Mind</span>
+            <span className="font-normal text-white">Confidence</span>
           </h1>
-          
-          {/* Subheadline */}
+
           <p className="
             text-lg sm:text-xl
             text-neutral-500
@@ -525,42 +544,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             mb-12
             tracking-tight
           ">
-            Neural translation with intelligent tone refinement. 
-            Your API key, your data, your control.
+            For those who translate 20 times a day and are tired of not trusting the result.
             <br />
-            <span className="text-neutral-600">Nothing leaves your browser.</span>
+            <span className="text-neutral-600">No prompts. No waiting. No repeating yourself.</span>
           </p>
-          
-          {/* CTA */}
+
           <div className={`
             transition-all duration-700
             ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
           `} style={{ transitionDelay: '200ms' }}>
             <CTAButton onClick={onEnter}>
-              Launch Verbum
+              Start Translating
             </CTAButton>
           </div>
-          
-          {/* Keyboard Hint */}
-          <div className={`
-            mt-8
-            flex items-center justify-center gap-2
-            text-[10px] tracking-[0.2em] text-neutral-700
-            transition-all duration-700
-            ${heroVisible ? 'opacity-100' : 'opacity-0'}
-          `} style={{ transitionDelay: '400ms' }}>
-            <kbd className="
-              px-2 py-1 rounded
-              bg-white/[0.03] border border-white/[0.06]
-              font-mono text-neutral-500
-            ">
-              Enter
-            </kbd>
-            <span>to proceed</span>
-          </div>
+
         </div>
-        
-        {/* Hero Demo - Floating Glass Card */}
+
+        {/* Hero Demo — OmniShowcase */}
         <div className={`
           relative z-10
           w-full max-w-2xl mx-auto
@@ -572,7 +572,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             <OmniShowcase />
           </GlassCard>
         </div>
-        
+
         {/* Scroll Indicator */}
         <div className="
           absolute bottom-12 left-1/2 -translate-x-1/2
@@ -589,9 +589,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
       </section>
 
       {/* ================================================================
-          FEATURE GRID - Bento V2 with Rich Visualizations
+          FEATURE GRID — Bento V2
           ================================================================ */}
-      <section 
+      <section
         id="capabilities"
         className="
           relative
@@ -599,7 +599,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           max-w-6xl mx-auto w-full
         "
       >
-        {/* Section Header */}
         <div className="text-center mb-20">
           <span className="
             text-[10px] tracking-[0.4em] uppercase
@@ -617,38 +616,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             Engineered for Precision
           </h2>
         </div>
-        
-        {/* Bento Grid V2 */}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card A: Privacy Architecture - Large */}
-            <BentoCard
-              title="Local-First Architecture"
-              subtitle="Your API keys never leave localhost. Zero server transmission."
-              className="md:col-span-2"
-              delay={0}
-            >
+          <BentoCard
+            title="Local-First Architecture"
+            subtitle="Your API keys never leave localhost. Zero server transmission."
+            className="md:col-span-2"
+            delay={0}
+          >
             <PrivacySchematic />
           </BentoCard>
-          
-          {/* Card B: Latency/Speed */}
-            <BentoCard
-              title="Sub-Second Inference"
-              subtitle="Optimized for Gemini and Grok fast models."
-              delay={100}
-            >
+
+          <BentoCard
+            title="Sub-Second Inference"
+            subtitle="Optimized for fast, cost-effective models."
+            delay={100}
+          >
             <LatencyCounter />
           </BentoCard>
-          
-          {/* Card C: Smart Pivot */}
+
           <BentoCard
             title="Smart Pivot"
-            subtitle="Auto-detects input language."
+            subtitle="Auto-detects input language. 15+ languages supported."
             delay={200}
           >
             <SmartPivotAnimation />
           </BentoCard>
-          
-          {/* Card D: Diff Engine - Wide */}
+
           <BentoCard
             title="Visual Diff Engine"
             subtitle="Character-level transformation tracking."
@@ -657,67 +651,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           >
             <MiniDiffViewer />
           </BentoCard>
-          
-          {/* Card E: Neural Refinement */}
+
           <BentoCard
             title="Tone Control"
-            subtitle="Executive, Concise, Diplomatic modes."
+            subtitle="Executive, Concise, Diplomatic, and Custom modes."
             delay={400}
           >
-            <div className="h-32 flex flex-col items-center justify-center">
-              <div className="flex flex-wrap gap-2 justify-center">
-                {['Executive', 'Concise', 'Diplomatic'].map((tone, i) => (
-                  <span 
-                    key={tone}
-                    className={`
-                      px-3 py-1.5 rounded-full
-                      text-[10px] tracking-[0.1em] uppercase
-                      border transition-all duration-500
-                      ${i === 0 
-                        ? 'bg-white/[0.06] border-white/[0.12] text-white' 
-                        : 'bg-white/[0.02] border-white/[0.04] text-neutral-500'
-                      }
-                    `}
-                    style={{ animationDelay: `${i * 100}ms` }}
-                  >
-                    {tone}
-                  </span>
-                ))}
-              </div>
-              <span className="mt-4 text-[9px] tracking-[0.15em] uppercase text-neutral-600">
-                + Custom Instructions
-              </span>
-            </div>
+            <ToneControlCard />
           </BentoCard>
-          
-          {/* Card F: Context Memory */}
+
           <BentoCard
-            title="Context Memory"
-            subtitle="Session history for consistent output."
+            title="Your Terms, Your Way"
+            subtitle="Consistent terminology across every translation."
             delay={500}
           >
-            <div className="h-32 flex flex-col items-center justify-center">
-              <div className="flex items-end gap-1 h-16">
-                {[0.3, 0.5, 0.7, 0.85, 1].map((height, i) => (
-                  <div
-                    key={i}
-                    className="w-3 bg-gradient-to-t from-white/20 to-white/5 rounded-t"
-                    style={{ 
-                      height: `${height * 100}%`,
-                      opacity: 0.4 + (i * 0.15)
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <span className="text-[9px] tracking-[0.1em] text-neutral-600 font-mono">
-                  depth: 64
-                </span>
-              </div>
-            </div>
+            <GlossaryCard />
           </BentoCard>
         </div>
       </section>
+
+      {/* ================================================================
+          COLLECTIO
+          ================================================================ */}
+      <CollectioSection />
 
       {/* ================================================================
           USE CASES SECTION
@@ -733,11 +689,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           ENHANCED FOOTER
           ================================================================ */}
       <EnhancedFooter onOpenModal={setActiveModal} />
-      
-      {/* Legal Modal */}
+
       <LegalModal type={activeModal} onClose={() => setActiveModal(null)} />
-      
-      {/* Global Keyboard Listener */}
+
       <GlobalKeyListener onEnter={onEnter} />
     </div>
   );
