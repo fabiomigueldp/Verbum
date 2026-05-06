@@ -38,3 +38,5 @@ AGENTS.md
 *.njsproj
 *.sln
 *.sw?
+
+session-ses_*.md

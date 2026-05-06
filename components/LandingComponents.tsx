@@ -364,7 +364,7 @@ export const MiniDiffViewer = memo(() => {
       
       {/* Status Indicator */}
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
-        <span className="text-[9px] tracking-[0.15em] uppercase text-neutral-600">
+        <span className="text-[10px] tracking-[0.15em] uppercase text-neutral-500">
           {showDiff ? 'Changes Highlighted' : 'Original Text'}
         </span>
       </div>
@@ -548,7 +548,7 @@ export const UseCaseSection = memo(() => {
           tracking-[-0.02em]
           text-[${TEXT_PRIMARY}]
         `}>
-          The Executive Standard
+          Built for Real Work
         </h2>
       </div>
       
@@ -976,7 +976,7 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
               Verbum
             </span>
             <p className="text-sm text-neutral-600 leading-relaxed">
-              Neural translation engineered for executive communication.
+              Neural translation for people who care about precision.
             </p>
           </div>
           
@@ -986,20 +986,32 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
               Product
             </span>
             <ul className="space-y-3">
-              <li>
-                <button 
-                  onClick={() => handleScrollTo('capabilities')}
-                  className="
-                    text-sm text-neutral-600 text-left
-                    hover:text-neutral-400
-                    transition-colors duration-300
-                  "
-                >
-                  Capabilities
-                </button>
-              </li>
-            </ul>
-          </div>
+          <li>
+            <button 
+              onClick={() => handleScrollTo('capabilities')}
+              className="
+                text-sm text-neutral-600 text-left
+                hover:text-neutral-400
+                transition-colors duration-300
+              "
+            >
+              Capabilities
+            </button>
+          </li>
+          <li>
+            <button 
+              onClick={() => handleScrollTo('collectio')}
+              className="
+                text-sm text-neutral-600 text-left
+                hover:text-neutral-400
+                transition-colors duration-300
+              "
+            >
+              Collectio
+            </button>
+          </li>
+        </ul>
+      </div>
           
           {/* Resources */}
           <div>
@@ -1174,7 +1186,7 @@ export const CollectioSection = memo(() => {
   const shards = [
     { title: 'Authentication Module', domain: 'Software Engineering', tags: ['api', 'auth', 'security'] },
     { title: 'Q3 Sales Analysis', domain: 'Business', tags: ['sales', 'quarter', 'report'] },
-    { title: 'Mediterranean Recipe', domain: 'Culinary', tags: ['food', 'recipe', 'mediterranean'] },
+    { title: 'Contract Review (PT→EN)', domain: 'Translation', tags: ['translated', 'legal', 'contract'] },
   ];
 
   return (
@@ -1355,10 +1367,10 @@ export const GlossaryCard = memo(() => {
             className={`
               flex items-center justify-between
               px-4 py-2.5 rounded-lg
-              border transition-all duration-700 ease-[${ANIMATION_EASING}]
+              transition-all duration-700 ease-[${ANIMATION_EASING}]
               ${term.active
-                ? 'bg-white/[0.05] border-white/[0.12]'
-                : 'bg-transparent border-white/[0.03]'
+                ? 'bg-white/[0.06] border border-white/[0.12]'
+                : ''
               }
             `}
           >
@@ -1370,7 +1382,7 @@ export const GlossaryCard = memo(() => {
               {term.source}
             </span>
             <span className={`
-              text-neutral-700 text-xs mx-3
+              text-xs mx-3
               transition-colors duration-500
               ${term.active ? 'text-neutral-500' : 'text-neutral-800'}
             `}>
@@ -1417,7 +1429,7 @@ export const ToneControlCard = memo(() => {
   return (
     <div className="relative h-36 flex flex-col items-center justify-center px-4">
       {/* Tone badge */}
-      <div className="mb-4">
+      <div className="mb-5">
         <span className="
           px-3 py-1 rounded-full
           text-[10px] tracking-[0.15em] uppercase font-medium
@@ -1429,7 +1441,7 @@ export const ToneControlCard = memo(() => {
       </div>
 
       {/* Diff */}
-      <div className="w-full space-y-2">
+      <div className="w-full space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-red-400/60 font-mono shrink-0">−</span>
           <span className="text-sm font-light text-neutral-500 line-through decoration-red-500/30 truncate">

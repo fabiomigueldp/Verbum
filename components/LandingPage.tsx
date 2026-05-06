@@ -537,16 +537,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
 
           <p className="
             text-lg sm:text-xl
-            text-neutral-500
+            text-neutral-400
             font-light
             leading-relaxed
             max-w-2xl mx-auto
             mb-12
             tracking-tight
           ">
-            For those who translate 20 times a day and are tired of not trusting the result.
+            For those who translate daily and are tired of not trusting the result.
             <br />
-            <span className="text-neutral-600">No prompts. No waiting. No repeating yourself.</span>
+            <span className="text-neutral-500">No prompts. No waiting. No repeating yourself.</span>
           </p>
 
           <div className={`
@@ -605,7 +605,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             text-neutral-600 font-medium
             block mb-4
           ">
-            Architecture
+            Capabilities
           </span>
           <h2 className="
             text-3xl sm:text-4xl
@@ -613,14 +613,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             tracking-[-0.02em]
             text-[#ededed]
           ">
-            Engineered for Precision
+            Built for How You Work
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <BentoCard
-            title="Local-First Architecture"
-            subtitle="Your API keys never leave localhost. Zero server transmission."
+            title="Your Data Stays Yours"
+            subtitle="Your API key never leaves your browser."
             className="md:col-span-2"
             delay={0}
           >
@@ -628,24 +628,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           </BentoCard>
 
           <BentoCard
-            title="Sub-Second Inference"
-            subtitle="Optimized for fast, cost-effective models."
+            title="Fast Enough to Forget"
+            subtitle="From thought to translation in under a second."
             delay={100}
           >
             <LatencyCounter />
           </BentoCard>
 
           <BentoCard
-            title="Smart Pivot"
-            subtitle="Auto-detects input language. 15+ languages supported."
+            title="Any Language, Either Way"
+            subtitle="Write in Portuguese, Japanese, Arabic, or Hebrew."
             delay={200}
           >
             <SmartPivotAnimation />
           </BentoCard>
 
           <BentoCard
-            title="Visual Diff Engine"
-            subtitle="Character-level transformation tracking."
+            title="See Exactly What Changed"
+            subtitle="Character-level diff shows every adjustment."
             className="md:col-span-2"
             delay={300}
           >
@@ -653,16 +653,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           </BentoCard>
 
           <BentoCard
-            title="Tone Control"
-            subtitle="Executive, Concise, Diplomatic, and Custom modes."
+            title="Sound How You Intend"
+            subtitle="Executive, concise, diplomatic — or your own voice."
             delay={400}
           >
             <ToneControlCard />
           </BentoCard>
 
           <BentoCard
-            title="Your Terms, Your Way"
-            subtitle="Consistent terminology across every translation."
+            title="Your Terms, Remembered"
+            subtitle="Define once. Applied to every translation."
             delay={500}
           >
             <GlossaryCard />
@@ -671,14 +671,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
       </section>
 
       {/* ================================================================
-          COLLECTIO
-          ================================================================ */}
-      <CollectioSection />
-
-      {/* ================================================================
           USE CASES SECTION
           ================================================================ */}
       <UseCaseSection />
+
+      {/* ================================================================
+          COLLECTIO
+          ================================================================ */}
+      <div id="collectio">
+        <CollectioSection />
+      </div>
 
       {/* ================================================================
           CREATOR STATEMENT
