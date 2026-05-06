@@ -1480,14 +1480,19 @@ ToneControlCard.displayName = 'ToneControlCard';
 export const GlobalKeyListener: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Respect modals: if a dialog is open, do not intercept Enter
+      const target = e.target as HTMLElement;
+      const isInsideModal = target?.closest('[role="dialog"], [aria-modal="true"]') !== null;
+      if (isInsideModal) return;
+
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         onEnter();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onEnter]);
-  
+
   return null;
 };

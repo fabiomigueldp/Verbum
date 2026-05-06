@@ -150,12 +150,30 @@ const App: React.FC = () => {
 
   // -- Landing --
   useEffect(() => {
-    const hasSeenLanding = localStorage.getItem('verbum_has_launched');
-    setShowLanding(hasSeenLanding !== 'true');
+    try {
+      const hasSeenLanding = localStorage.getItem('verbum_has_launched');
+      setShowLanding(hasSeenLanding !== 'true');
+    } catch {
+      // localStorage blocked or unavailable — show landing as fallback
+      setShowLanding(true);
+    }
   }, []);
 
+  // -- Loading timeout — prevent infinite spinner if initialization hangs --
+  useEffect(() => {
+    if (showLanding !== null) return;
+    const timeout = setTimeout(() => {
+      setShowLanding(true);
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [showLanding]);
+
   const handleEnterApp = useCallback(() => {
-    localStorage.setItem('verbum_has_launched', 'true');
+    try {
+      localStorage.setItem('verbum_has_launched', 'true');
+    } catch {
+      // Silently ignore localStorage failures — user can still use the app
+    }
     setShowLanding(false);
   }, []);
 
@@ -282,18 +300,18 @@ const App: React.FC = () => {
   // -- Save Persistence --
   useEffect(() => {
     const timer = setTimeout(() => {
-      localStorage.setItem('verbum_history', JSON.stringify(history));
+      try { localStorage.setItem('verbum_history', JSON.stringify(history)); } catch {}
     }, 1000);
     return () => clearTimeout(timer);
   }, [history]);
 
-  useEffect(() => { localStorage.setItem('verbum_custom_tones', JSON.stringify(customTones)); }, [customTones]);
-  useEffect(() => { localStorage.setItem('verbum_auto_enhance', JSON.stringify(autoEnhance)); }, [autoEnhance]);
-  useEffect(() => { localStorage.setItem('verbum_context_enabled', JSON.stringify(contextEnabled)); }, [contextEnabled]);
-  useEffect(() => { localStorage.setItem('verbum_context_depth', JSON.stringify(contextDepth)); }, [contextDepth]);
-  useEffect(() => { localStorage.setItem('verbum_provider', provider); }, [provider]);
+  useEffect(() => { try { localStorage.setItem('verbum_custom_tones', JSON.stringify(customTones)); } catch {} }, [customTones]);
+  useEffect(() => { try { localStorage.setItem('verbum_auto_enhance', JSON.stringify(autoEnhance)); } catch {} }, [autoEnhance]);
+  useEffect(() => { try { localStorage.setItem('verbum_context_enabled', JSON.stringify(contextEnabled)); } catch {} }, [contextEnabled]);
+  useEffect(() => { try { localStorage.setItem('verbum_context_depth', JSON.stringify(contextDepth)); } catch {} }, [contextDepth]);
+  useEffect(() => { try { localStorage.setItem('verbum_provider', provider); } catch {} }, [provider]);
   useEffect(() => {
-    localStorage.setItem('verbum_api_keys', JSON.stringify(apiKeys));
+    try { localStorage.setItem('verbum_api_keys', JSON.stringify(apiKeys)); } catch {}
   }, [apiKeys]);
   useEffect(() => {
     if (!isValidModelForProvider(provider, model)) return;
@@ -305,15 +323,15 @@ const App: React.FC = () => {
       return persistModelForProvider(provider, model, prev);
     });
   }, [model, provider]);
-  useEffect(() => { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); }, [sessionStats]);
-  useEffect(() => { localStorage.setItem('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
-  useEffect(() => { localStorage.setItem('verbum_target_language', targetLanguage); }, [targetLanguage]);
-  useEffect(() => { localStorage.setItem('verbum_app_mode', appMode); }, [appMode]);
+  useEffect(() => { try { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); } catch {} }, [sessionStats]);
+  useEffect(() => { try { localStorage.setItem('verbum_anchor_language', anchorLanguage); } catch {} }, [anchorLanguage]);
+  useEffect(() => { try { localStorage.setItem('verbum_target_language', targetLanguage); } catch {} }, [targetLanguage]);
+  useEffect(() => { try { localStorage.setItem('verbum_app_mode', appMode); } catch {} }, [appMode]);
   useEffect(() => {
-    localStorage.setItem('verbum_glossary_v1', JSON.stringify({ entries: glossaryEntries, version: 1 }));
+    try { localStorage.setItem('verbum_glossary_v1', JSON.stringify({ entries: glossaryEntries, version: 1 })); } catch {}
   }, [glossaryEntries]);
   useEffect(() => {
-    localStorage.setItem('verbum_glossary_enabled', JSON.stringify(glossaryEnabled));
+    try { localStorage.setItem('verbum_glossary_enabled', JSON.stringify(glossaryEnabled)); } catch {}
   }, [glossaryEnabled]);
 
   // -- Language config --
