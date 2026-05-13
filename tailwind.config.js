@@ -1,0 +1,163 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: 'class',
+  content: [
+    './index.html',
+    './index.tsx',
+    './App.tsx',
+    './components/**/*.{ts,tsx}',
+    './hooks/**/*.{ts,tsx}',
+    './services/**/*.{ts,tsx}',
+    './utils/**/*.{ts,tsx}',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-up': 'slideUp 0.4s ease-out',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spin-slow': 'spin 3s linear infinite',
+        'shimmer': 'shimmer 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'drift': 'drift 16s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate',
+        'shimmer-fast': 'shimmerFast 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite',
+        'bone-pulse': 'bonePulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'aurora': 'aurora 14s ease-in-out infinite alternate',
+        'breathe': 'breathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'skeleton-drift': 'skeletonDrift 20s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate',
+        'skeleton-breathe': 'skeletonBreathe 5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'skeleton-flow': 'skeletonFlow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'liquid-fill': 'liquidFill 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+        'caustic-wave': 'causticWave 3s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite',
+        'glass-breathe': 'glassBreathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'grain-drift': 'grainDrift 12s linear infinite',
+        'content-reveal': 'contentReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'materialize-flash': 'materializeFlash 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+        'glow-pulse': 'glowPulse 2s cubic-bezier(0.4, 0, 0.6, 1)',
+        'element-reveal': 'elementReveal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'skeleton-exit': 'skeletonExit 0.3s cubic-bezier(0.4, 0, 1, 1) forwards',
+        'content-enter': 'contentEnter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'arrival-glow': 'arrivalGlow 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+        'breathe-glow': 'breatheGlow 4s ease-in-out infinite',
+        'fade-slide-in': 'fadeSlideIn 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(200%)' },
+        },
+        drift: {
+          '0%': { transform: 'translate(0%, 0%) rotate(0deg) scale(1)', opacity: '0.4' },
+          '50%': { opacity: '0.6' },
+          '100%': { transform: 'translate(5%, 3%) rotate(1.5deg) scale(1.02)', opacity: '0.5' },
+        },
+        shimmerFast: {
+          '0%': { transform: 'translateX(-150%) skewX(-15deg)', opacity: '0' },
+          '20%': { opacity: '1' },
+          '80%': { opacity: '1' },
+          '100%': { transform: 'translateX(250%) skewX(-15deg)', opacity: '0' },
+        },
+        bonePulse: {
+          '0%, 100%': { opacity: '0.4', transform: 'scaleX(1)' },
+          '50%': { opacity: '0.7', transform: 'scaleX(1.002)' },
+        },
+        aurora: {
+          '0%': { backgroundPosition: '0% 50%', filter: 'blur(60px)' },
+          '50%': { backgroundPosition: '100% 50%', filter: 'blur(80px)' },
+          '100%': { backgroundPosition: '0% 50%', filter: 'blur(60px)' },
+        },
+        breathe: {
+          '0%, 100%': { opacity: '0.02' },
+          '50%': { opacity: '0.04' },
+        },
+        liquidFill: {
+          '0%': { transform: 'translateX(-100%) scaleY(1)', opacity: '0' },
+          '10%': { opacity: '1', transform: 'translateX(-80%) scaleY(1.015)' },
+          '50%': { transform: 'translateX(0%) scaleY(1.025)', opacity: '1' },
+          '90%': { transform: 'translateX(80%) scaleY(1.015)', opacity: '1' },
+          '100%': { transform: 'translateX(100%) scaleY(1)', opacity: '0' },
+        },
+        causticWave: {
+          '0%': { transform: 'translateX(-120%) rotate(-2deg)', opacity: '0' },
+          '15%': { opacity: '0.8' },
+          '50%': { transform: 'translateX(0%) rotate(0deg)', opacity: '1' },
+          '85%': { opacity: '0.8' },
+          '100%': { transform: 'translateX(120%) rotate(2deg)', opacity: '0' },
+        },
+        glassBreathe: {
+          '0%, 100%': { opacity: '0.3', transform: 'scale(1)' },
+          '50%': { opacity: '0.5', transform: 'scale(1.01)' },
+        },
+        grainDrift: {
+          '0%': { transform: 'translate(0, 0)' },
+          '100%': { transform: 'translate(-10%, -10%)' },
+        },
+        skeletonDrift: {
+          '0%': { transform: 'translate(0%, 0%)', opacity: '0.3' },
+          '100%': { transform: 'translate(2%, 1%)', opacity: '0.4' },
+        },
+        skeletonBreathe: {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.55' },
+        },
+        skeletonFlow: {
+          '0%': { transform: 'translateX(-100%)', opacity: '0' },
+          '20%': { opacity: '0.6' },
+          '80%': { opacity: '0.6' },
+          '100%': { transform: 'translateX(100%)', opacity: '0' },
+        },
+        skeletonExit: {
+          '0%': { opacity: '1', filter: 'blur(0)' },
+          '100%': { opacity: '0', filter: 'blur(2px)' },
+        },
+        contentEnter: {
+          '0%': { opacity: '0.4', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        arrivalGlow: {
+          '0%': { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0)' },
+          '30%': { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' },
+          '100%': { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0)' },
+        },
+        breatheGlow: {
+          '0%, 100%': { opacity: '0.5' },
+          '50%': { opacity: '1' },
+        },
+        fadeSlideIn: {
+          '0%': { opacity: '0', transform: 'translateX(-8px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        contentReveal: {
+          '0%': { opacity: '0', transform: 'translateY(8px)', filter: 'blur(4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)', filter: 'blur(0)' },
+        },
+        materializeFlash: {
+          '0%': { opacity: '0', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0), 0 0 0 0 rgba(255,255,255,0)' },
+          '15%': { opacity: '1', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15), 0 0 30px 0 rgba(255,255,255,0.1)' },
+          '50%': { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 15px 0 rgba(255,255,255,0.05)' },
+          '100%': { opacity: '1', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0), 0 0 0 0 rgba(255,255,255,0)' },
+        },
+        glowPulse: {
+          '0%': { boxShadow: '0 0 0 0 rgba(255,255,255,0)' },
+          '30%': { boxShadow: '0 0 20px 0 rgba(255,255,255,0.08)' },
+          '100%': { boxShadow: '0 0 0 0 rgba(255,255,255,0)' },
+        },
+        elementReveal: {
+          '0%': { opacity: '0', transform: 'translateY(4px)', filter: 'blur(2px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)', filter: 'blur(0)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+};

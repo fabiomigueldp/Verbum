@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Monolito base -->
+  <rect width="512" height="512" rx="128" fill="#121212"/>
+  
+  <!-- Borda de luz (1px style) para destacar profundidade do bloco -->
+  <rect x="1" y="1" width="510" height="510" rx="127" stroke="#2A2A2A" stroke-width="2"/>
+  
+  <!-- Corte interno (espaço negativo formando o V) -->
+  <path d="M150 170 L256 370 L362 170 L338 170 L256 325 L174 170 Z" fill="#E5E5E5" fill-opacity="0.9"/>
+  
+  <!-- Sutil linha de refração dentro do recorte para trazer textura -->
+  <path d="M174 170 L256 325 L338 170" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="1" fill="none"/>
+</svg>

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Glossary, GlossaryEntry, GlossaryCompliance, LanguageCode, SUPPORTED_LANGUAGES } from '../../types';
+import { storageGet, storageSetJson } from './storage';
 
 const STORAGE_KEY = 'verbum_glossary_v1';
 const MAX_ENTRIES = 500;
@@ -15,7 +16,7 @@ const MAX_ENTRIES = 500;
 
 export const loadGlossary = (): Glossary => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return { entries: [], version: 1 };
     const parsed = JSON.parse(raw) as Glossary;
     if (!parsed || !Array.isArray(parsed.entries)) return { entries: [], version: 1 };
@@ -26,10 +27,8 @@ export const loadGlossary = (): Glossary => {
 };
 
 export const saveGlossary = (glossary: Glossary): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(glossary));
-  } catch (e) {
-    console.warn('Glossary: failed to persist', e);
+  if (!storageSetJson(STORAGE_KEY, glossary)) {
+    console.warn('Glossary: failed to persist');
   }
 };
 

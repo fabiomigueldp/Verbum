@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#0A0A0A"/>
+  <!-- Efeito de vidro sutil e iluminação -->
+  <defs>
+    <linearGradient id="glassLeft" x1="140" y1="160" x2="300" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#333333" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#111111" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="glassRight" x1="372" y1="160" x2="212" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#444444" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#111111" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#555555" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#222222" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Borda externa de 1px simulando corpo da ferramenta -->
+  <rect x="1" y="1" width="510" height="510" rx="111" stroke="#222222" stroke-width="2"/>
+  
+  <!-- Braço Esquerdo do V -->
+  <path d="M150 160 L256 370 L300 370 L194 160 Z" fill="url(#glassLeft)" stroke="url(#edge)" stroke-width="1.5"/>
+  <!-- Braço Direito do V -->
+  <path d="M362 160 L256 370 L212 370 L318 160 Z" fill="url(#glassRight)" stroke="url(#edge)" stroke-width="1.5"/>
+</svg>

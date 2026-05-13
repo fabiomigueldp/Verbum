@@ -26,7 +26,7 @@ import {
 
 export type Provider = string;
 
-const resolveRuntime = (config?: AiRuntimeConfig) => {
+const resolveRuntime = async (config?: AiRuntimeConfig) => {
   const providerId = config?.provider || 'gemini';
   const provider = getProvider(providerId);
   if (!provider) {
@@ -39,7 +39,7 @@ const resolveRuntime = (config?: AiRuntimeConfig) => {
   return {
     providerId,
     model,
-    adapter: provider.adapter(),
+    adapter: await provider.adapter(),
     config: {
       ...config,
       provider: providerId,
@@ -146,7 +146,7 @@ export const translateText = async (
   contextHistory?: ContextMessage[],
   config?: AiRuntimeConfig
 ): Promise<TranslationResponse> => {
-  const runtime = resolveRuntime(config);
+  const runtime = await resolveRuntime(config);
   const { adapter, providerId: provider, model } = runtime;
   const start = performance.now();
   let result: NormalizedResponse | undefined;
@@ -206,7 +206,7 @@ export const refineText = async (
   instruction: string,
   config?: AiRuntimeConfig
 ): Promise<RefinementResponse> => {
-  const runtime = resolveRuntime(config);
+  const runtime = await resolveRuntime(config);
   const { adapter, providerId: provider, model } = runtime;
   const start = performance.now();
   let result: NormalizedResponse | undefined;
@@ -249,7 +249,7 @@ export const indexText = async (
 ): Promise<IndexerResponse> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  const adapter = p.adapter();
+  const adapter = await p.adapter();
   const resolvedModel = model && isValidModelForProvider(provider, model) ? model : getFirstModelId(provider);
   const start = performance.now();
 
@@ -288,7 +288,7 @@ export const generateCollectionManifest = async (
 ): Promise<ManifestResponse> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  const adapter = p.adapter();
+  const adapter = await p.adapter();
   const resolvedModel = model && isValidModelForProvider(provider, model) ? model : getFirstModelId(provider);
   const inputText = `Manifest for ${shards.length} shards`;
   const start = performance.now();
@@ -324,7 +324,7 @@ export const validateApiKey = async (
 ): Promise<boolean> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  const adapter = p.adapter();
+  const adapter = await p.adapter();
   return adapter.validateApiKey(apiKey);
 };
 
@@ -335,6 +335,6 @@ export const validateProviderModel = async (
 ): Promise<boolean> => {
   const p = getProvider(provider);
   if (!p) throw new Error(`Unknown provider: ${provider}`);
-  const adapter = p.adapter();
+  const adapter = await p.adapter();
   return adapter.validateModel(apiKey, model);
 };

@@ -1,21 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { Eraser, Command, Languages, Database } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { TranslationItem } from './components/TranslationItem';
 import { LiquidSkeleton } from './components/LiquidSkeleton';
-import { RefineModal } from './components/RefineModal';
 import { ApiKeyGate } from './components/ApiKeyGate';
 import { Composer, ComposerRef } from './components/Composer';
-import { LandingPage } from './components/LandingPage';
-import { IngestionDeck, KnowledgeLattice, CompilerHUD } from './components/collectio';
 import { useCollectio } from './hooks/useCollectio';
 import { translateText, refineText, validateApiKey, validateProviderModel } from './services/aiRouter';
-import { OperationDetailModal } from './components/OperationDetailModal';
-import { RequestLogViewer } from './components/RequestLogViewer';
 import { getRequestLogById } from './services/core/telemetry';
 import { getFirstModelId, getProvider, getDefaultProviderId, isValidModelForProvider } from './services/providers';
 import { getPublicBuildTimeApiKey, hasPublicBuildTimeApiKey } from './services/core/env';
 import { migrateSettingsStorage, persistModelForProvider } from './services/core/storageMigrations';
+import { requestPersistentStorage, storageGet, storageSet, storageSetJson } from './services/core/storage';
 import { 
   TranslationRecord, 
   ToneOption, 
@@ -35,6 +31,14 @@ import { calculateCostNano } from './utils/pricing';
 // ============================================================================
 
 type AppMode = 'translation' | 'collectio';
+
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const RefineModal = lazy(() => import('./components/RefineModal').then(module => ({ default: module.RefineModal })));
+const OperationDetailModal = lazy(() => import('./components/OperationDetailModal').then(module => ({ default: module.OperationDetailModal })));
+const RequestLogViewer = lazy(() => import('./components/RequestLogViewer').then(module => ({ default: module.RequestLogViewer })));
+const IngestionDeck = lazy(() => import('./components/collectio/IngestionDeck').then(module => ({ default: module.IngestionDeck })));
+const KnowledgeLattice = lazy(() => import('./components/collectio/KnowledgeLattice').then(module => ({ default: module.KnowledgeLattice })));
+const CompilerHUD = lazy(() => import('./components/collectio/CompilerHUD').then(module => ({ default: module.CompilerHUD })));
 
 
 
@@ -150,13 +154,8 @@ const App: React.FC = () => {
 
   // -- Landing --
   useEffect(() => {
-    try {
-      const hasSeenLanding = localStorage.getItem('verbum_has_launched');
-      setShowLanding(hasSeenLanding !== 'true');
-    } catch {
-      // localStorage blocked or unavailable — show landing as fallback
-      setShowLanding(true);
-    }
+    const hasSeenLanding = storageGet('verbum_has_launched');
+    setShowLanding(hasSeenLanding !== 'true');
   }, []);
 
   // -- Loading timeout — prevent infinite spinner if initialization hangs --
@@ -169,13 +168,16 @@ const App: React.FC = () => {
   }, [showLanding]);
 
   const handleEnterApp = useCallback(() => {
-    try {
-      localStorage.setItem('verbum_has_launched', 'true');
-    } catch {
-      // Silently ignore localStorage failures — user can still use the app
-    }
+    storageSet('verbum_has_launched', 'true');
+    void requestPersistentStorage();
     setShowLanding(false);
   }, []);
+
+  useEffect(() => {
+    if (showLanding === false) {
+      void requestPersistentStorage();
+    }
+  }, [showLanding]);
 
   // -- Settings migration / initial auth state --
   useEffect(() => {
@@ -227,28 +229,28 @@ const App: React.FC = () => {
 
   // -- Load Persistence --
   useEffect(() => {
-    const savedHistory = localStorage.getItem('verbum_history');
+    const savedHistory = storageGet('verbum_history');
     if (savedHistory) {
       try { setHistory(JSON.parse(savedHistory)); } catch (e) { console.error("History parse error", e); }
     }
-    const savedTones = localStorage.getItem('verbum_custom_tones');
+    const savedTones = storageGet('verbum_custom_tones');
     if (savedTones) {
       try { setCustomTones(JSON.parse(savedTones)); } catch (e) { console.error("Tones parse error", e); }
     }
-    const savedAutoEnhance = localStorage.getItem('verbum_auto_enhance');
+    const savedAutoEnhance = storageGet('verbum_auto_enhance');
     if (savedAutoEnhance) {
       try { setAutoEnhance(JSON.parse(savedAutoEnhance)); } catch (e) { console.error("Auto Enhance parse error", e); }
     }
-    const savedContextEnabled = localStorage.getItem('verbum_context_enabled');
+    const savedContextEnabled = storageGet('verbum_context_enabled');
     if (savedContextEnabled) {
       try { setContextEnabled(JSON.parse(savedContextEnabled)); } catch (e) { console.error("Context Enabled parse error", e); }
     }
-    const savedContextDepth = localStorage.getItem('verbum_context_depth');
+    const savedContextDepth = storageGet('verbum_context_depth');
     if (savedContextDepth) {
       try { setContextDepth(JSON.parse(savedContextDepth)); } catch (e) { console.error("Context Depth parse error", e); }
     }
 
-    const savedSessionStats = localStorage.getItem('verbum_session_stats');
+    const savedSessionStats = storageGet('verbum_session_stats');
     if (savedSessionStats) {
       try {
         const parsed = JSON.parse(savedSessionStats) as UsageSession;
@@ -261,21 +263,21 @@ const App: React.FC = () => {
       }
     }
 
-    const savedAnchorLang = localStorage.getItem('verbum_anchor_language');
+    const savedAnchorLang = storageGet('verbum_anchor_language');
     if (savedAnchorLang) {
       setAnchorLanguage(savedAnchorLang as Exclude<LanguageCode, 'unknown'>);
     }
-    const savedTargetLang = localStorage.getItem('verbum_target_language');
+    const savedTargetLang = storageGet('verbum_target_language');
     if (savedTargetLang) {
       setTargetLanguage(savedTargetLang as Exclude<LanguageCode, 'unknown'>);
     }
 
-    const savedAppMode = localStorage.getItem('verbum_app_mode');
+    const savedAppMode = storageGet('verbum_app_mode');
     if (savedAppMode === 'translation' || savedAppMode === 'collectio') {
       setAppMode(savedAppMode);
     }
 
-    const savedGlossary = localStorage.getItem('verbum_glossary_v1');
+    const savedGlossary = storageGet('verbum_glossary_v1');
     if (savedGlossary) {
       try {
         const parsed = JSON.parse(savedGlossary);
@@ -287,7 +289,7 @@ const App: React.FC = () => {
       }
     }
 
-    const savedGlossaryEnabled = localStorage.getItem('verbum_glossary_enabled');
+    const savedGlossaryEnabled = storageGet('verbum_glossary_enabled');
     if (savedGlossaryEnabled !== null) {
       try {
         setGlossaryEnabled(JSON.parse(savedGlossaryEnabled));
@@ -300,18 +302,18 @@ const App: React.FC = () => {
   // -- Save Persistence --
   useEffect(() => {
     const timer = setTimeout(() => {
-      try { localStorage.setItem('verbum_history', JSON.stringify(history)); } catch {}
+      storageSetJson('verbum_history', history);
     }, 1000);
     return () => clearTimeout(timer);
   }, [history]);
 
-  useEffect(() => { try { localStorage.setItem('verbum_custom_tones', JSON.stringify(customTones)); } catch {} }, [customTones]);
-  useEffect(() => { try { localStorage.setItem('verbum_auto_enhance', JSON.stringify(autoEnhance)); } catch {} }, [autoEnhance]);
-  useEffect(() => { try { localStorage.setItem('verbum_context_enabled', JSON.stringify(contextEnabled)); } catch {} }, [contextEnabled]);
-  useEffect(() => { try { localStorage.setItem('verbum_context_depth', JSON.stringify(contextDepth)); } catch {} }, [contextDepth]);
-  useEffect(() => { try { localStorage.setItem('verbum_provider', provider); } catch {} }, [provider]);
+  useEffect(() => { storageSetJson('verbum_custom_tones', customTones); }, [customTones]);
+  useEffect(() => { storageSetJson('verbum_auto_enhance', autoEnhance); }, [autoEnhance]);
+  useEffect(() => { storageSetJson('verbum_context_enabled', contextEnabled); }, [contextEnabled]);
+  useEffect(() => { storageSetJson('verbum_context_depth', contextDepth); }, [contextDepth]);
+  useEffect(() => { storageSet('verbum_provider', provider); }, [provider]);
   useEffect(() => {
-    try { localStorage.setItem('verbum_api_keys', JSON.stringify(apiKeys)); } catch {}
+    storageSetJson('verbum_api_keys', apiKeys);
   }, [apiKeys]);
   useEffect(() => {
     if (!isValidModelForProvider(provider, model)) return;
@@ -323,15 +325,15 @@ const App: React.FC = () => {
       return persistModelForProvider(provider, model, prev);
     });
   }, [model, provider]);
-  useEffect(() => { try { localStorage.setItem('verbum_session_stats', JSON.stringify(sessionStats)); } catch {} }, [sessionStats]);
-  useEffect(() => { try { localStorage.setItem('verbum_anchor_language', anchorLanguage); } catch {} }, [anchorLanguage]);
-  useEffect(() => { try { localStorage.setItem('verbum_target_language', targetLanguage); } catch {} }, [targetLanguage]);
-  useEffect(() => { try { localStorage.setItem('verbum_app_mode', appMode); } catch {} }, [appMode]);
+  useEffect(() => { storageSetJson('verbum_session_stats', sessionStats); }, [sessionStats]);
+  useEffect(() => { storageSet('verbum_anchor_language', anchorLanguage); }, [anchorLanguage]);
+  useEffect(() => { storageSet('verbum_target_language', targetLanguage); }, [targetLanguage]);
+  useEffect(() => { storageSet('verbum_app_mode', appMode); }, [appMode]);
   useEffect(() => {
-    try { localStorage.setItem('verbum_glossary_v1', JSON.stringify({ entries: glossaryEntries, version: 1 })); } catch {}
+    storageSetJson('verbum_glossary_v1', { entries: glossaryEntries, version: 1 });
   }, [glossaryEntries]);
   useEffect(() => {
-    try { localStorage.setItem('verbum_glossary_enabled', JSON.stringify(glossaryEnabled)); } catch {}
+    storageSetJson('verbum_glossary_enabled', glossaryEnabled);
   }, [glossaryEnabled]);
 
   // -- Language config --
@@ -635,7 +637,15 @@ const App: React.FC = () => {
   }
 
   if (showLanding) {
-    return <LandingPage onEnter={handleEnterApp} />;
+    return (
+      <Suspense fallback={(
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
+        </div>
+      )}>
+        <LandingPage onEnter={handleEnterApp} />
+      </Suspense>
+    );
   }
 
   return (
@@ -653,81 +663,87 @@ const App: React.FC = () => {
 
       {/* Settings Modal */}
       {showSettings && (
-        <RefineModal
-          currentTone={tone}
-          customTones={customTones}
-          autoEnhance={autoEnhance}
-          onToggleAutoEnhance={setAutoEnhance}
-          contextEnabled={contextEnabled}
-          onToggleContext={setContextEnabled}
-          contextDepth={contextDepth}
-          onUpdateContextDepth={setContextDepth}
-          model={model}
-          provider={provider}
-          apiKeys={apiKeys}
-          resolvedApiKey={resolvedApiKey}
-          isEnvKey={(() => {
-            const saved = apiKeys[provider]?.trim() || '';
-            if (saved) return false;
-            return hasPublicBuildTimeApiKey(provider);
-          })()}
-          onProviderChange={handleProviderChange}
-          onModelChange={setModel}
-          onApiKeyChange={handleApiKeyChange}
-          sessionStats={sessionStats}
-          onResetSessionStats={resetSessionStats}
-          onShowLogs={() => { setShowSettings(false); setShowLogViewer(true); }}
-          anchorLanguage={anchorLanguage}
-          targetLanguage={targetLanguage}
-          onAnchorLanguageChange={setAnchorLanguage}
-          onTargetLanguageChange={setTargetLanguage}
-          onSelect={setTone}
-          onAddCustomTone={handleAddCustomTone}
-          onDeleteCustomTone={handleDeleteCustomTone}
-          glossaryEntries={glossaryEntries}
-          onAddGlossaryEntry={handleAddGlossaryEntry}
-          onDeleteGlossaryEntry={handleDeleteGlossaryEntry}
-          glossaryEnabled={glossaryEnabled}
-          onToggleGlossary={handleToggleGlossary}
-          onClose={() => { setShowSettings(false); setSettingsFocus(null); }}
-          initialFocus={settingsFocus}
-        />
+        <Suspense fallback={null}>
+          <RefineModal
+            currentTone={tone}
+            customTones={customTones}
+            autoEnhance={autoEnhance}
+            onToggleAutoEnhance={setAutoEnhance}
+            contextEnabled={contextEnabled}
+            onToggleContext={setContextEnabled}
+            contextDepth={contextDepth}
+            onUpdateContextDepth={setContextDepth}
+            model={model}
+            provider={provider}
+            apiKeys={apiKeys}
+            resolvedApiKey={resolvedApiKey}
+            isEnvKey={(() => {
+              const saved = apiKeys[provider]?.trim() || '';
+              if (saved) return false;
+              return hasPublicBuildTimeApiKey(provider);
+            })()}
+            onProviderChange={handleProviderChange}
+            onModelChange={setModel}
+            onApiKeyChange={handleApiKeyChange}
+            sessionStats={sessionStats}
+            onResetSessionStats={resetSessionStats}
+            onShowLogs={() => { setShowSettings(false); setShowLogViewer(true); }}
+            anchorLanguage={anchorLanguage}
+            targetLanguage={targetLanguage}
+            onAnchorLanguageChange={setAnchorLanguage}
+            onTargetLanguageChange={setTargetLanguage}
+            onSelect={setTone}
+            onAddCustomTone={handleAddCustomTone}
+            onDeleteCustomTone={handleDeleteCustomTone}
+            glossaryEntries={glossaryEntries}
+            onAddGlossaryEntry={handleAddGlossaryEntry}
+            onDeleteGlossaryEntry={handleDeleteGlossaryEntry}
+            glossaryEnabled={glossaryEnabled}
+            onToggleGlossary={handleToggleGlossary}
+            onClose={() => { setShowSettings(false); setSettingsFocus(null); }}
+            initialFocus={settingsFocus}
+          />
+        </Suspense>
       )}
 
       {/* Operation Detail Modal */}
       {selectedLogId && (
-        <OperationDetailModal
-          log={(() => {
-            const log = getRequestLogById(selectedLogId);
-            if (!log) {
-              // Fallback: create a minimal log if not found
-              return {
-                id: selectedLogId,
-                timestamp: Date.now(),
-                provider: provider,
-                model: model,
-                operation: 'translate',
-                durationMs: 0,
-                status: 'error' as const,
-                errorMessage: 'Log not found — may have been cleared or expired.',
-                inputTokens: 0,
-                outputTokens: 0,
-                totalTokens: 0,
-                estimatedCostNano: '0',
-                inputLength: 0,
-                inputPreview: '',
-                tokensPerSecond: 0,
-              };
-            }
-            return log;
-          })()}
-          onClose={() => setSelectedLogId(null)}
-        />
+        <Suspense fallback={null}>
+          <OperationDetailModal
+            log={(() => {
+              const log = getRequestLogById(selectedLogId);
+              if (!log) {
+                // Fallback: create a minimal log if not found
+                return {
+                  id: selectedLogId,
+                  timestamp: Date.now(),
+                  provider: provider,
+                  model: model,
+                  operation: 'translate',
+                  durationMs: 0,
+                  status: 'error' as const,
+                  errorMessage: 'Log not found — may have been cleared or expired.',
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  totalTokens: 0,
+                  estimatedCostNano: '0',
+                  inputLength: 0,
+                  inputPreview: '',
+                  tokensPerSecond: 0,
+                };
+              }
+              return log;
+            })()}
+            onClose={() => setSelectedLogId(null)}
+          />
+        </Suspense>
       )}
 
       {/* Request Log Viewer */}
       {showLogViewer && (
-        <RequestLogViewer onClose={() => setShowLogViewer(false)} />
+        <Suspense fallback={null}>
+          <RequestLogViewer onClose={() => setShowLogViewer(false)} />
+        </Suspense>
       )}
 
       {/* Mode Toggle — hidden when Settings is open */}
@@ -851,7 +867,11 @@ const App: React.FC = () => {
 
       {/* Collectio Mode */}
       {appMode === 'collectio' && (
-        <>
+        <Suspense fallback={(
+          <div className="w-full min-h-[240px] flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
+          </div>
+        )}>
           <div className="w-full mb-10 z-20">
             <IngestionDeck
               onIngest={collectio.ingest}
@@ -888,7 +908,7 @@ const App: React.FC = () => {
             onDeselectAll={collectio.deselectAll}
             onCopySelectedRaw={collectio.getSelectedRawContent}
           />
-        </>
+        </Suspense>
       )}
 
     </div>

@@ -1,5 +1,6 @@
 import { UsageSession } from '../../types';
 import type { Shard, UndoTransaction } from '../useCollectio';
+import { storageGet, storageSetJson } from '../../services/core/storage';
 
 const STORAGE_KEY = 'verbum_collectio';
 const STORAGE_KEY_V2 = 'verbum_collectio_v2';
@@ -105,39 +106,47 @@ export const expireTransactions = (
 
 export const hydrateCollectioState = (): HydratedCollectioState => {
   const now = Date.now();
-  const savedV2 = localStorage.getItem(STORAGE_KEY_V2);
+  const savedV2 = storageGet(STORAGE_KEY_V2);
 
   if (savedV2) {
-    const parsedV2 = JSON.parse(savedV2) as PersistedCollectioV2;
-    if (parsedV2 && parsedV2.version === 2 && Array.isArray(parsedV2.shards)) {
-      const normalizedShards = inferAndNormalizeShards(parsedV2.shards);
-      const parsedTransactions = Array.isArray(parsedV2.undoTransactions)
-        ? parsedV2.undoTransactions.filter(isUndoTransaction)
-        : [];
-      const { shards, transactions } = expireTransactions(normalizedShards, parsedTransactions, now);
-      const inferredNext = shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
-      const persistedNext = typeof parsedV2.nextIngestSeq === 'number' && Number.isFinite(parsedV2.nextIngestSeq)
-        ? parsedV2.nextIngestSeq
-        : 1;
-      return {
-        shards,
-        transactions,
-        nextIngestSeq: Math.max(inferredNext, persistedNext),
-        sessionStats: readCollectioStats(),
-      };
+    try {
+      const parsedV2 = JSON.parse(savedV2) as PersistedCollectioV2;
+      if (parsedV2 && parsedV2.version === 2 && Array.isArray(parsedV2.shards)) {
+        const normalizedShards = inferAndNormalizeShards(parsedV2.shards);
+        const parsedTransactions = Array.isArray(parsedV2.undoTransactions)
+          ? parsedV2.undoTransactions.filter(isUndoTransaction)
+          : [];
+        const { shards, transactions } = expireTransactions(normalizedShards, parsedTransactions, now);
+        const inferredNext = shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1;
+        const persistedNext = typeof parsedV2.nextIngestSeq === 'number' && Number.isFinite(parsedV2.nextIngestSeq)
+          ? parsedV2.nextIngestSeq
+          : 1;
+        return {
+          shards,
+          transactions,
+          nextIngestSeq: Math.max(inferredNext, persistedNext),
+          sessionStats: readCollectioStats(),
+        };
+      }
+    } catch {
+      // Fall through to legacy or empty state.
     }
   }
 
-  const savedShards = localStorage.getItem(STORAGE_KEY);
+  const savedShards = storageGet(STORAGE_KEY);
   if (savedShards) {
-    const parsed = JSON.parse(savedShards) as Shard[];
-    const shards = inferAndNormalizeShards(parsed.filter((shard: Shard) => !shard.deletedAt));
-    return {
-      shards,
-      transactions: [],
-      nextIngestSeq: shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1,
-      sessionStats: readCollectioStats(),
-    };
+    try {
+      const parsed = JSON.parse(savedShards) as Shard[];
+      const shards = inferAndNormalizeShards(parsed.filter((shard: Shard) => !shard.deletedAt));
+      return {
+        shards,
+        transactions: [],
+        nextIngestSeq: shards.reduce((max, shard) => Math.max(max, shard.ingestSeq), 0) + 1,
+        sessionStats: readCollectioStats(),
+      };
+    } catch {
+      // Fall through to empty state.
+    }
   }
 
   return {
@@ -162,8 +171,11 @@ export const persistCollectioState = (
   const legacyShards = shards.filter(s => !s.deletedAt);
 
   try {
-    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(payload));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(legacyShards));
+    const savedV2 = storageSetJson(STORAGE_KEY_V2, payload);
+    const savedLegacy = storageSetJson(STORAGE_KEY, legacyShards);
+    if (!savedV2 || !savedLegacy) {
+      return { ok: false, error: 'unknown' };
+    }
     return { ok: true };
   } catch (e) {
     if (e instanceof DOMException && (
@@ -177,11 +189,15 @@ export const persistCollectioState = (
 };
 
 export const readCollectioStats = (): UsageSession | undefined => {
-  const savedStats = localStorage.getItem(STATS_KEY);
-  return savedStats ? JSON.parse(savedStats) as UsageSession : undefined;
+  const savedStats = storageGet(STATS_KEY);
+  if (!savedStats) return undefined;
+  try {
+    return JSON.parse(savedStats) as UsageSession;
+  } catch {
+    return undefined;
+  }
 };
 
 export const persistCollectioStats = (stats: UsageSession): void => {
-  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  storageSetJson(STATS_KEY, stats);
 };
-

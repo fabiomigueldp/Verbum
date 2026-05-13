@@ -4,6 +4,7 @@ import {
   isValidModelForProvider,
   isValidProvider,
 } from '../providers';
+import { storageGet, storageSet, storageSetJson } from './storage';
 
 const SETTINGS_VERSION_KEY = 'verbum_settings_schema_version';
 const API_KEYS_KEY = 'verbum_api_keys';
@@ -20,7 +21,7 @@ export interface MigratedSettings {
 
 const readJsonObject = (key: string): Record<string, string> => {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = storageGet(key);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
@@ -35,20 +36,20 @@ const readJsonObject = (key: string): Record<string, string> => {
 export const migrateSettingsStorage = (): MigratedSettings => {
   const apiKeys = readJsonObject(API_KEYS_KEY);
 
-  const oldGemini = localStorage.getItem('verbum_api_key_gemini');
-  const oldXai = localStorage.getItem('verbum_api_key_xai');
-  const oldLegacy = localStorage.getItem('verbum_api_key');
+  const oldGemini = storageGet('verbum_api_key_gemini');
+  const oldXai = storageGet('verbum_api_key_xai');
+  const oldLegacy = storageGet('verbum_api_key');
   if (oldGemini && !apiKeys.gemini) apiKeys.gemini = oldGemini;
   if (oldXai && !apiKeys.xai) apiKeys.xai = oldXai;
   if (oldLegacy && !apiKeys.gemini) apiKeys.gemini = oldLegacy;
 
-  const savedProvider = localStorage.getItem(PROVIDER_KEY);
+  const savedProvider = storageGet(PROVIDER_KEY);
   const provider = savedProvider && isValidProvider(savedProvider)
     ? savedProvider
     : getDefaultProviderId();
 
   const modelByProvider = readJsonObject(MODEL_BY_PROVIDER_KEY);
-  const legacyModel = localStorage.getItem(MODEL_KEY);
+  const legacyModel = storageGet(MODEL_KEY);
   if (legacyModel && isValidModelForProvider(provider, legacyModel)) {
     modelByProvider[provider] = legacyModel;
   }
@@ -58,15 +59,11 @@ export const migrateSettingsStorage = (): MigratedSettings => {
     : getFirstModelId(provider);
   modelByProvider[provider] = activeModel;
 
-  try {
-    localStorage.setItem(API_KEYS_KEY, JSON.stringify(apiKeys));
-    localStorage.setItem(PROVIDER_KEY, provider);
-    localStorage.setItem(MODEL_BY_PROVIDER_KEY, JSON.stringify(modelByProvider));
-    localStorage.setItem(MODEL_KEY, activeModel);
-    localStorage.setItem(SETTINGS_VERSION_KEY, '2');
-  } catch {
-    // Storage may be full or unavailable; return migrated in-memory state anyway.
-  }
+  storageSetJson(API_KEYS_KEY, apiKeys);
+  storageSet(PROVIDER_KEY, provider);
+  storageSetJson(MODEL_BY_PROVIDER_KEY, modelByProvider);
+  storageSet(MODEL_KEY, activeModel);
+  storageSet(SETTINGS_VERSION_KEY, '2');
 
   return {
     apiKeys,
@@ -82,12 +79,7 @@ export const persistModelForProvider = (
   current: Record<string, string> = readJsonObject(MODEL_BY_PROVIDER_KEY)
 ): Record<string, string> => {
   const next = { ...current, [provider]: model };
-  try {
-    localStorage.setItem(MODEL_BY_PROVIDER_KEY, JSON.stringify(next));
-    localStorage.setItem(MODEL_KEY, model);
-  } catch {
-    // ignore
-  }
+  storageSetJson(MODEL_BY_PROVIDER_KEY, next);
+  storageSet(MODEL_KEY, model);
   return next;
 };
-

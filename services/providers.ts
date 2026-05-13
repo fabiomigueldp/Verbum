@@ -1,8 +1,4 @@
-import { ProviderAdapter } from './adapters/baseAdapter';
-import { GeminiAdapter } from './adapters/geminiAdapter';
-import { XAIAdapter } from './adapters/xaiAdapter';
-import { OpenAIAdapter } from './adapters/openaiAdapter';
-import { DeepSeekAdapter } from './adapters/deepseekAdapter';
+import type { ProviderAdapter } from './adapters/baseAdapter';
 
 // ============================================================================
 // PROVIDER REGISTRY
@@ -54,7 +50,7 @@ export interface ProviderConfig {
   keyUrl: string;
   keyPlaceholder: string;
   /** Factory function — creates a fresh adapter instance */
-  adapter: () => ProviderAdapter;
+  adapter: () => Promise<ProviderAdapter>;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +101,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     keyPattern: /^AIza[0-9A-Za-z-_]{35}$/,
     keyUrl: 'https://aistudio.google.com/apikey',
     keyPlaceholder: 'AIza...',
-    adapter: () => new GeminiAdapter(),
+    adapter: async () => {
+      const { GeminiAdapter } = await import('./adapters/geminiAdapter');
+      return new GeminiAdapter();
+    },
   },
 
   xai: {
@@ -130,7 +129,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     keyPattern: /^xai-[A-Za-z0-9_-]+$/,
     keyUrl: 'https://console.x.ai/team/default/api-keys',
     keyPlaceholder: 'xai-...',
-    adapter: () => new XAIAdapter(),
+    adapter: async () => {
+      const { XAIAdapter } = await import('./adapters/xaiAdapter');
+      return new XAIAdapter();
+    },
   },
 
   openai: {
@@ -185,7 +187,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     keyPattern: /^sk-[A-Za-z0-9_-]+$/, // OpenAI keys start with sk-
     keyUrl: 'https://platform.openai.com/api-keys',
     keyPlaceholder: 'sk-...',
-    adapter: () => new OpenAIAdapter(),
+    adapter: async () => {
+      const { OpenAIAdapter } = await import('./adapters/openaiAdapter');
+      return new OpenAIAdapter();
+    },
   },
 
   deepseek: {
@@ -214,7 +219,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     keyPattern: /^sk-[a-f0-9]{32}$/i, // DeepSeek keys format
     keyUrl: 'https://platform.deepseek.com/api_keys',
     keyPlaceholder: 'sk-...',
-    adapter: () => new DeepSeekAdapter(),
+    adapter: async () => {
+      const { DeepSeekAdapter } = await import('./adapters/deepseekAdapter');
+      return new DeepSeekAdapter();
+    },
   },
 };
 

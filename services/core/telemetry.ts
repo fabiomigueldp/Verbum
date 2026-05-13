@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { calculateCostNano } from '../../utils/pricing';
+import { storageGet, storageRemove, storageSetJson } from './storage';
 
 export type OperationType = 'translate' | 'refine' | 'index' | 'manifest';
 
@@ -94,7 +95,7 @@ const computeTokensPerSecond = (totalTokens: number, durationMs: number): number
 
 const loadLogs = (): RequestLog[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as RequestLog[];
     if (!Array.isArray(parsed)) return [];
@@ -105,7 +106,7 @@ const loadLogs = (): RequestLog[] => {
 
     // If we removed expired entries, save back
     if (valid.length < parsed.length) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+      storageSetJson(STORAGE_KEY, valid);
     }
 
     return valid;
@@ -115,10 +116,8 @@ const loadLogs = (): RequestLog[] => {
 };
 
 const saveLogs = (logs: RequestLog[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-  } catch (e) {
-    console.warn('Telemetry: failed to persist logs', e);
+  if (!storageSetJson(STORAGE_KEY, logs)) {
+    console.warn('Telemetry: failed to persist logs');
   }
 };
 
@@ -158,11 +157,7 @@ export const getRequestLogById = (id: string): RequestLog | undefined => {
 };
 
 export const clearRequestLogs = (): void => {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
+  storageRemove(STORAGE_KEY);
 };
 
 export const exportRequestLogs = (): string => {
