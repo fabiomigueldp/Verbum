@@ -16,6 +16,11 @@ const REASONING_CONFIGS: Record<ReasoningMode, ReasoningConfig | undefined> = {
       thinkingBudget: 0,
     },
   },
+  'gemini-minimal': {
+    thinkingConfig: {
+      thinkingLevel: 'MINIMAL',
+    },
+  },
   'openai-none': {
     reasoning: {
       effort: 'none' as const,
@@ -25,6 +30,9 @@ const REASONING_CONFIGS: Record<ReasoningMode, ReasoningConfig | undefined> = {
     reasoning: {
       effort: 'low' as const,
     },
+  },
+  'xai-none': {
+    reasoning_effort: 'none' as const,
   },
   'deepseek-disabled': {
     thinking: {

@@ -28,7 +28,15 @@ export interface ModelPricing {
 
 export type ProviderApiKind = 'gemini-sdk' | 'responses' | 'chat-completions';
 export type StructuredOutputKind = 'gemini_schema' | 'json_schema' | 'json_object';
-export type ReasoningMode = 'gemini-disabled' | 'openai-none' | 'openai-low' | 'deepseek-disabled' | 'model-selected' | 'unsupported';
+export type ReasoningMode =
+  | 'gemini-disabled'
+  | 'gemini-minimal'
+  | 'openai-none'
+  | 'openai-low'
+  | 'xai-none'
+  | 'deepseek-disabled'
+  | 'model-selected'
+  | 'unsupported';
 
 export interface ModelCapabilities {
   api: ProviderApiKind;
@@ -62,6 +70,20 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     id: 'gemini',
     name: 'Google Gemini',
     models: [
+      {
+        id: 'gemini-3.1-flash-lite',
+        label: 'Gemini 3.1 Flash-Lite',
+        desc: 'Current stable model for fast, high-volume translation.',
+        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 1.50 },
+        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
+      },
+      {
+        id: 'gemini-3.5-flash',
+        label: 'Gemini 3.5 Flash',
+        desc: 'Current stable frontier Flash model.',
+        pricing: { inputPer1M: 1.50, cachedInputPer1M: 0.15, outputPer1M: 9.00 },
+        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
+      },
       {
         id: 'gemini-2.5-flash-lite',
         label: 'Gemini 2.5 Flash Lite',
@@ -112,16 +134,14 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'xAI Grok',
     models: [
       {
-        id: 'grok-4-1-fast-non-reasoning',
-        label: 'Grok 4.1 Fast (Non-Reasoning)',
-        desc: 'Fixed model for xAI.',
-        badge: 'Fixed',
-        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: { inputPer1M: 0.20, outputPer1M: 0.50 },
+        id: 'grok-4.3',
+        label: 'Grok 4.3',
+        desc: 'Current general-purpose Grok model.',
+        pricing: { inputPer1M: 1.25, cachedInputPer1M: 0.20, outputPer1M: 2.50 },
         capabilities: {
           api: 'chat-completions',
           structuredOutput: 'json_schema',
-          reasoning: 'model-selected',
+          reasoning: 'xai-none',
           realCostField: 'usage.cost_in_usd_ticks',
         },
       },
@@ -158,6 +178,58 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
       {
+        id: 'gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+        desc: 'Current GPT-5.6 model for cost-sensitive workloads.',
+        pricing: {
+          inputPer1M: 1.00,
+          cachedInputPer1M: 0.10,
+          outputPer1M: 6.00,
+          contextWindowThreshold: 272_000,
+          longContextInputPer1M: 2.00,
+          longContextCachedInputPer1M: 0.20,
+          longContextOutputPer1M: 9.00,
+        },
+        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
+      },
+      {
+        id: 'gpt-5.6-terra',
+        label: 'GPT-5.6 Terra',
+        desc: 'Current GPT-5.6 balance of intelligence and cost.',
+        pricing: {
+          inputPer1M: 2.50,
+          cachedInputPer1M: 0.25,
+          outputPer1M: 15.00,
+          contextWindowThreshold: 272_000,
+          longContextInputPer1M: 5.00,
+          longContextCachedInputPer1M: 0.50,
+          longContextOutputPer1M: 22.50,
+        },
+        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
+      },
+      {
+        id: 'gpt-5.6-sol',
+        label: 'GPT-5.6 Sol',
+        desc: 'Current GPT-5.6 flagship model.',
+        pricing: {
+          inputPer1M: 5.00,
+          cachedInputPer1M: 0.50,
+          outputPer1M: 30.00,
+          contextWindowThreshold: 272_000,
+          longContextInputPer1M: 10.00,
+          longContextCachedInputPer1M: 1.00,
+          longContextOutputPer1M: 45.00,
+        },
+        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
+      },
+      {
+        id: 'chat-latest',
+        label: 'Chat Latest (Instant)',
+        desc: 'Rolling alias for the latest Instant model used in ChatGPT.',
+        pricing: { inputPer1M: 5.00, cachedInputPer1M: 0.50, outputPer1M: 30.00 },
+        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'unsupported' },
+      },
+      {
         id: 'gpt-5-nano',
         label: 'GPT-5 Nano',
         desc: 'Legacy low-cost model.',
@@ -169,14 +241,12 @@ const PROVIDERS: Record<string, ProviderConfig> = {
       {
         id: 'gpt-5.5',
         label: 'GPT-5.5',
-        desc: 'Latest flagship quality.',
-        badge: 'Latest',
-        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
+        desc: 'Previous frontier model for complex professional work.',
         pricing: {
           inputPer1M: 5.00,
           cachedInputPer1M: 0.50,
           outputPer1M: 30.00,
-          contextWindowThreshold: 200_000,
+          contextWindowThreshold: 272_000,
           longContextInputPer1M: 10.00,
           longContextCachedInputPer1M: 1.00,
           longContextOutputPer1M: 45.00,

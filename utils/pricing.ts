@@ -1,6 +1,6 @@
 import { getModelPricing, getAllProviders } from '../services/providers';
 
-const DEFAULT_MODEL_ID = 'gemini-2.5-flash-lite';
+const DEFAULT_MODEL_ID = 'gemini-3.1-flash-lite';
 
 /**
  * Resolve pricing for a model from the provider registry.
@@ -64,10 +64,9 @@ export interface CostBreakdown {
  */
 export const calculateCostBreakdown = (modelId: string, input: CostInput): CostBreakdown => {
   const pricing = resolvePricing(modelId);
-  const totalTokens = input.totalTokens ?? input.inputTokens + input.outputTokens;
   const useLongContext = Boolean(
     pricing.contextWindowThreshold &&
-    totalTokens > pricing.contextWindowThreshold
+    input.inputTokens > pricing.contextWindowThreshold
   );
 
   const inputRate = useLongContext && pricing.longContextInputPer1M !== undefined

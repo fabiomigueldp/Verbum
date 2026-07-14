@@ -22,7 +22,7 @@ import { getReasoningConfig } from '../core/reasoning';
 // Native SDK with typed JSON schema support.
 // ============================================================================
 
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
 
 const resolveApiKey = (apiKey?: string): string => {
   const key = apiKey?.trim();
@@ -189,7 +189,7 @@ export class GeminiAdapter implements ProviderAdapter {
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {
-    return this.validateModel(apiKey, 'gemini-2.5-flash-lite');
+    return this.validateModel(apiKey, DEFAULT_MODEL);
   }
 
   async validateModel(apiKey: string, model: string): Promise<boolean> {

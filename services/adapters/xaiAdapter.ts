@@ -14,6 +14,7 @@ import {
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
 import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
 // XAI ADAPTER
@@ -21,7 +22,7 @@ import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } fro
 // ============================================================================
 
 const XAI_API_BASE = 'https://api.x.ai/v1';
-const DEFAULT_MODEL = 'grok-4-1-fast-non-reasoning';
+const DEFAULT_MODEL = 'grok-4.3';
 
 const resolveApiKey = (apiKey?: string): string => {
   const key = apiKey?.trim();
@@ -44,6 +45,7 @@ interface XaiPayload {
     type: 'json_schema';
     json_schema: Record<string, unknown>;
   };
+  reasoning_effort?: 'none';
 }
 
 const callXai = async (
@@ -85,8 +87,10 @@ export class XAIAdapter implements ProviderAdapter {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
 
+    const model = resolveModel(config?.model);
     const payload: XaiPayload = {
-      model: resolveModel(config?.model),
+      model,
+      ...getReasoningConfig('xai', model),
       temperature: 0,
       messages: [
         { role: 'system', content: systemInstruction },
@@ -106,8 +110,10 @@ export class XAIAdapter implements ProviderAdapter {
     instruction: string,
     config?: AiRuntimeConfig
   ): Promise<NormalizedResponse> {
+    const model = resolveModel(config?.model);
     const payload: XaiPayload = {
-      model: resolveModel(config?.model),
+      model,
+      ...getReasoningConfig('xai', model),
       temperature: 0,
       messages: [
         { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
@@ -127,8 +133,10 @@ export class XAIAdapter implements ProviderAdapter {
     existingDomains?: string[],
     config?: AiRuntimeConfig
   ): Promise<IndexerResponse> {
+    const model = resolveModel(config?.model);
     const payload: XaiPayload = {
-      model: resolveModel(config?.model),
+      model,
+      ...getReasoningConfig('xai', model),
       temperature: 0,
       messages: [
         { role: 'system', content: buildIndexerInstruction(existingDomains) },
@@ -170,8 +178,10 @@ export class XAIAdapter implements ProviderAdapter {
     }
 
     try {
+      const model = resolveModel(config?.model);
       const payload: XaiPayload = {
-        model: resolveModel(config?.model),
+        model,
+        ...getReasoningConfig('xai', model),
         temperature: 0,
         messages: [
           { role: 'system', content: MANIFEST_SYSTEM_INSTRUCTION },
