@@ -38,16 +38,16 @@ const ticksToNanoDollars = (value: unknown): string | undefined => {
 // ---------------------------------------------------------------------------
 // Gemini
 // ---------------------------------------------------------------------------
-export const normalizeGeminiResponse = (raw: any): RawAdapterResponse => {
-  const usage = raw?.usageMetadata;
+export const normalizeGeminiInteractionResponse = (raw: any): RawAdapterResponse => {
+  const usage = raw?.usage;
   return {
-    text: raw?.text || '',
+    text: raw?.output_text || '',
     usage: usage ? {
-      input: usage.promptTokenCount ?? 0,
-      output: usage.candidatesTokenCount ?? 0,
-      total: usage.totalTokenCount ?? 0,
-      cachedInput: usage.cachedContentTokenCount,
-      reasoning: usage.thoughtsTokenCount,
+      input: usage.total_input_tokens ?? 0,
+      output: usage.total_output_tokens ?? 0,
+      total: usage.total_tokens ?? 0,
+      cachedInput: usage.total_cached_tokens,
+      reasoning: usage.total_thought_tokens,
     } : undefined,
   };
 };

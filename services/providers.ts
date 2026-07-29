@@ -29,7 +29,6 @@ export interface ModelPricing {
 export type ProviderApiKind = 'gemini-sdk' | 'responses' | 'chat-completions';
 export type StructuredOutputKind = 'gemini_schema' | 'json_schema' | 'json_object';
 export type ReasoningMode =
-  | 'gemini-disabled'
   | 'gemini-minimal'
   | 'openai-none'
   | 'openai-low'
@@ -71,53 +70,25 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'Google Gemini',
     models: [
       {
-        id: 'gemini-3.1-flash-lite',
-        label: 'Gemini 3.1 Flash-Lite',
-        desc: 'Current stable model for fast, high-volume translation.',
-        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 1.50 },
+        id: 'gemini-3.5-flash-lite',
+        label: 'Gemini 3.5 Flash-Lite',
+        desc: 'Fastest current model for high-volume translation.',
+        pricing: { inputPer1M: 0.30, cachedInputPer1M: 0.03, outputPer1M: 2.50 },
+        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
+      },
+      {
+        id: 'gemini-3.6-flash',
+        label: 'Gemini 3.6 Flash',
+        desc: 'Latest balance of intelligence, speed, and token efficiency.',
+        pricing: { inputPer1M: 1.50, cachedInputPer1M: 0.15, outputPer1M: 7.50 },
         capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
       },
       {
         id: 'gemini-3.5-flash',
         label: 'Gemini 3.5 Flash',
-        desc: 'Current stable frontier Flash model.',
+        desc: 'Stable frontier Flash model for demanding text tasks.',
         pricing: { inputPer1M: 1.50, cachedInputPer1M: 0.15, outputPer1M: 9.00 },
         capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
-      },
-      {
-        id: 'gemini-2.5-flash-lite',
-        label: 'Gemini 2.5 Flash Lite',
-        desc: 'Maximum speed. Instant latency.',
-        badge: 'Fastest',
-        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: { inputPer1M: 0.10, cachedInputPer1M: 0.01, outputPer1M: 0.40 },
-        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-disabled' },
-      },
-      {
-        id: 'gemini-2.5-flash',
-        label: 'Gemini 2.5 Flash',
-        desc: 'Balanced performance.',
-        badge: 'Balanced',
-        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: { inputPer1M: 0.30, cachedInputPer1M: 0.03, outputPer1M: 2.50 },
-        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-disabled' },
-      },
-      {
-        id: 'gemini-2.5-pro',
-        label: 'Gemini 2.5 Pro',
-        desc: 'Complex reasoning.',
-        badge: 'Pro',
-        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: {
-          inputPer1M: 1.25,
-          cachedInputPer1M: 0.125,
-          outputPer1M: 10.00,
-          contextWindowThreshold: 200_000,
-          longContextInputPer1M: 2.50,
-          longContextCachedInputPer1M: 0.25,
-          longContextOutputPer1M: 15.00,
-        },
-        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-disabled' },
       },
     ],
     keyPattern: /^AIza[0-9A-Za-z-_]{35}$/,

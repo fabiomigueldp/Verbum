@@ -97,7 +97,7 @@ const App: React.FC = () => {
 
   // -- Provider / Model (generic) --
   const [provider, setProvider] = useState<ProviderOption>(DEFAULT_PROVIDER);
-  const [model, setModel] = useState<string>('gemini-2.5-flash-lite');
+  const [model, setModel] = useState<string>('gemini-3.5-flash-lite');
 
   // -- API Keys (generic: Record<providerId, key>) --
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});

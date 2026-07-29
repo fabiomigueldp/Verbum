@@ -206,7 +206,7 @@ export const useCollectio = (apiKey?: string, provider: string = 'gemini', model
   // Update session stats with usage metadata
   const updateStats = useCallback((usageMetadata?: UsageMetadata, actualCostNano?: string) => {
     if (!usageMetadata) return;
-    const effectiveModelId = modelId || 'gemini-2.5-flash-lite';
+    const effectiveModelId = modelId || 'gemini-3.5-flash-lite';
     const inputTokens = usageMetadata.promptTokens;
     const outputTokens = usageMetadata.candidatesTokens;
     const costNano = calculateCostNano(

@@ -1,6 +1,6 @@
 import { getModelPricing, getAllProviders } from '../services/providers';
 
-const DEFAULT_MODEL_ID = 'gemini-3.1-flash-lite';
+const DEFAULT_MODEL_ID = 'gemini-3.5-flash-lite';
 
 /**
  * Resolve pricing for a model from the provider registry.

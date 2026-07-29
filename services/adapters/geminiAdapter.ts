@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { LanguageConfig, ContextMessage, AiRuntimeConfig, IndexerResponse, ManifestResponse, ShardSummary } from '../../types';
 import { ProviderAdapter } from './baseAdapter';
 import { TranslationSchema, RefinementSchema, IndexerSchema, ManifestSchema, JsonSchema } from '../core/schemas';
@@ -14,15 +14,15 @@ import {
   buildManifestUserPrompt,
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
-import { normalizeGeminiResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+import { normalizeGeminiInteractionResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
 import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
 // GEMINI ADAPTER
-// Native SDK with typed JSON schema support.
+// Native SDK using the stateless Interactions API with JSON Schema output.
 // ============================================================================
 
-const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
 const resolveApiKey = (apiKey?: string): string => {
   const key = apiKey?.trim();
@@ -37,22 +37,6 @@ const generateFallbackTitle = (text: string): string => {
   return cleaned.length === 30 ? `${cleaned}...` : cleaned;
 };
 
-/**
- * Convert universal JsonSchema to Gemini SDK Type schema.
- */
-const toGeminiSchema = (schema: JsonSchema): Record<string, unknown> => ({
-  type: Type.OBJECT,
-  properties: Object.fromEntries(
-    Object.entries(schema.properties).map(([key, prop]) => {
-      if (prop.type === 'array') {
-        return [key, { type: Type.ARRAY, items: { type: Type.STRING } }];
-      }
-      return [key, { type: Type.STRING, description: prop.description }];
-    })
-  ),
-  required: schema.required,
-});
-
 const generate = async (
   apiKey: string,
   model: string,
@@ -62,18 +46,20 @@ const generate = async (
 ): Promise<NormalizedResponse> => {
   const client = new GoogleGenAI({ apiKey });
 
-    const response = await client.models.generateContent({
-      model,
-      contents: userContent,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: toGeminiSchema(schema) as any,
-        ...getReasoningConfig('gemini', model),
-      },
-    });
+  const response = await client.interactions.create({
+    model,
+    input: userContent,
+    system_instruction: systemInstruction,
+    store: false,
+    response_format: {
+      type: 'text',
+      mime_type: 'application/json',
+      schema,
+    },
+    ...getReasoningConfig('gemini', model),
+  });
 
-  const raw = normalizeGeminiResponse(response);
+  const raw = normalizeGeminiInteractionResponse(response);
   return toNormalizedResponse(raw, response);
 };
 
@@ -195,10 +181,16 @@ export class GeminiAdapter implements ProviderAdapter {
   async validateModel(apiKey: string, model: string): Promise<boolean> {
     try {
       const client = new GoogleGenAI({ apiKey });
-      await client.models.generateContent({
-        model: resolveModel(model),
-        contents: 'Test',
-        config: { responseMimeType: 'text/plain' },
+      const resolvedModel = resolveModel(model);
+      await client.interactions.create({
+        model: resolvedModel,
+        input: 'Reply with OK.',
+        store: false,
+        response_format: {
+          type: 'text',
+          mime_type: 'text/plain',
+        },
+        ...getReasoningConfig('gemini', resolvedModel),
       });
       return true;
     } catch {

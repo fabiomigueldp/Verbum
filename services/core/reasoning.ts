@@ -1,9 +1,9 @@
 // ============================================================================
 // CORE REASONING
-// Unified reasoning disable configuration for all adapters.
-// Verbum's default: reasoning is ALWAYS disabled for translation, refinement,
-// indexing, and manifest generation. These tasks require deterministic,
-// fast output — reasoning adds latency, cost, and unpredictability.
+// Unified lowest-reasoning configuration for all adapters.
+// Verbum requests no reasoning where supported and the lowest available level
+// otherwise. Gemini 3.x "minimal" may still emit thought tokens, but it is the
+// lowest level supported by the current stable models.
 // ============================================================================
 
 import { getModelConfig, ReasoningMode } from '../providers';
@@ -11,14 +11,9 @@ import { getModelConfig, ReasoningMode } from '../providers';
 type ReasoningConfig = Record<string, unknown>;
 
 const REASONING_CONFIGS: Record<ReasoningMode, ReasoningConfig | undefined> = {
-  'gemini-disabled': {
-    thinkingConfig: {
-      thinkingBudget: 0,
-    },
-  },
   'gemini-minimal': {
-    thinkingConfig: {
-      thinkingLevel: 'MINIMAL',
+    generation_config: {
+      thinking_level: 'minimal',
     },
   },
   'openai-none': {
