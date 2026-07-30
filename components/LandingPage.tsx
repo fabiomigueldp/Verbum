@@ -191,199 +191,63 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-// Timing constants (in ms)
-const PHASE_INPUT = 4000;
-const PHASE_PROCESSING = 1500;
-const PHASE_OUTPUT = 5000;
-const CYCLE_DURATION = PHASE_INPUT + PHASE_PROCESSING + PHASE_OUTPUT;
-
 // ============================================================================
 // OMNI-SHOWCASE COMPONENT
 // ============================================================================
 
-type Phase = 'input' | 'processing' | 'output';
-
 const OmniShowcase = memo(() => {
-  const [scenarioIndex, setScenarioIndex] = useState(0);
-  const [phase, setPhase] = useState<Phase>('input');
-  const [progress, setProgress] = useState(0);
-  const progressRef = useRef<number>(0);
-  const animationFrameRef = useRef<number | null>(null);
-
-  const scenario = SCENARIOS[scenarioIndex];
+  const scenario = SCENARIOS[0];
   const Icon = scenario.icon;
-
-  useEffect(() => {
-    const startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const newProgress = Math.min((elapsed / CYCLE_DURATION) * 100, 100);
-
-      if (Math.abs(newProgress - progressRef.current) > 0.5) {
-        progressRef.current = newProgress;
-        setProgress(newProgress);
-      }
-
-      if (elapsed < CYCLE_DURATION) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      }
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [scenarioIndex]);
-
-  useEffect(() => {
-    setPhase('input');
-    setProgress(0);
-    progressRef.current = 0;
-
-    const timer1 = setTimeout(() => setPhase('processing'), PHASE_INPUT);
-    const timer2 = setTimeout(() => setPhase('output'), PHASE_INPUT + PHASE_PROCESSING);
-    const timer3 = setTimeout(() => {
-      setScenarioIndex(prev => (prev + 1) % SCENARIOS.length);
-    }, CYCLE_DURATION);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
-  }, [scenarioIndex]);
-
   const isInputRTL = /[\u0600-\u06FF\u0590-\u05FF]/.test(scenario.input);
 
   return (
     <div className="relative">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className={`
+          <div className="
             flex items-center gap-2
             px-3 py-1.5 rounded-full
             text-[10px] tracking-[0.2em] uppercase font-medium
-            transition-all duration-700 ease-in-out
-            ${phase === 'output'
-              ? 'bg-white/[0.08] text-white border border-white/[0.12]'
-              : 'bg-white/[0.04] text-neutral-500 border border-white/[0.06]'
-            }
-          `}>
-            <Icon size={12} className={`
-              transition-all duration-500
-              ${phase === 'processing' ? 'animate-pulse' : ''}
-              ${phase === 'output' ? 'text-white' : 'text-neutral-500'}
-            `} />
+            bg-white/[0.08] text-white border border-white/[0.12]
+          ">
+            <Icon size={12} />
             <span>{scenario.label}</span>
           </div>
 
-          <div className={`
+          <div className="
             px-2.5 py-1 rounded-md
             text-[9px] tracking-[0.15em] uppercase font-semibold
-            transition-all duration-700 ease-in-out
-            bg-white/[0.03] border
-            border-white/[0.06]
-            ${phase === 'output' ? 'text-white' : 'text-neutral-500'}
-          `}>
+            bg-white/[0.03] border border-white/[0.06] text-neutral-300
+          ">
             {scenario.badge}
           </div>
         </div>
 
-        <div className="text-[9px] tracking-[0.15em] text-neutral-700 font-mono tabular-nums">
-          {String(scenarioIndex + 1).padStart(2, '0')}/{String(SCENARIOS.length).padStart(2, '0')}
+        <div className="text-[9px] tracking-[0.15em] text-neutral-500 font-mono tabular-nums">
+          01/{String(SCENARIOS.length).padStart(2, '0')}
         </div>
       </div>
 
-      <div className="relative min-h-[140px] sm:min-h-[120px]">
+      <div className="space-y-5">
         <p
           dir={isInputRTL ? 'rtl' : 'ltr'}
           className={`
-            absolute inset-0
-            text-base sm:text-lg md:text-xl
-            font-light leading-relaxed tracking-tight
-            transition-all duration-1000 ease-in-out
-            ${phase === 'input'
-              ? 'opacity-100 blur-0 translate-y-0'
-              : 'opacity-0 blur-[3px] -translate-y-2'
-            }
-            text-neutral-400
+            text-sm sm:text-base font-light leading-relaxed tracking-tight text-neutral-500
             ${isInputRTL ? 'text-right' : 'text-left'}
           `}
         >
           {scenario.input}
         </p>
 
-        <p className={`
-          absolute inset-0
-          text-base sm:text-lg md:text-xl
-          font-light leading-relaxed tracking-tight
-          transition-all duration-1000 ease-in-out
-          ${phase === 'output'
-            ? 'opacity-100 blur-0 translate-y-0'
-            : 'opacity-0 blur-[3px] translate-y-2'
-          }
-          text-[#ededed]
-        `}>
+        <div className="h-px bg-white/[0.06]" />
+
+        <p className="text-base sm:text-lg md:text-xl font-light leading-relaxed tracking-tight text-[#ededed]">
           {scenario.output}
         </p>
-
-        <div className={`
-          absolute inset-0
-          flex items-center justify-center
-          transition-all duration-500 ease-in-out
-          ${phase === 'processing' ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-        `}>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              {[0, 1, 2].map(i => (
-                <div
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full bg-white/40"
-                  style={{
-                    animation: 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    animationDelay: `${i * 150}ms`,
-                  }}
-                />
-              ))}
-            </div>
-            <span className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 font-medium">
-              {scenario.mode === 'refinement' || scenario.mode === 'diff'
-                ? 'Refining'
-                : scenario.mode === 'glossary'
-                  ? 'Applying Terms'
-                  : scenario.mode === 'voice'
-                    ? 'Transcribing'
-                    : 'Translating'
-              }
-            </span>
-            <div className="flex items-center gap-1.5">
-              {[0, 1, 2].map(i => (
-                <div
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full bg-white/40"
-                  style={{
-                    animation: 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    animationDelay: `${(i + 3) * 150}ms`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="mt-6 h-px bg-white/[0.04] rounded-full overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-white/20 via-white/40 to-white/20 rounded-full transition-none"
-          style={{
-            width: `${progress}%`,
-            transition: 'width 100ms linear',
-          }}
-        />
+        <div className="h-full w-full bg-white/30 rounded-full" />
       </div>
     </div>
   );
@@ -466,18 +330,13 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
-  const [heroVisible, setHeroVisible] = useState(false);
+  const heroVisible = true;
   const [activeModal, setActiveModal] = useState<LegalModalType>(null);
   const heroRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setHeroVisible(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <div className="
-      min-h-screen
+      min-h-screen min-h-[100dvh]
       flex flex-col
       selection:bg-white/20 selection:text-white
       overflow-x-hidden
@@ -485,6 +344,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
       {/* Floating HUD Header */}
       <HUDHeader onLaunch={onEnter} />
 
+      <main>
       {/* ================================================================
           HERO SECTION
           ================================================================ */}
@@ -492,7 +352,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         ref={heroRef}
         className="
           relative
-          min-h-screen
+          min-h-screen min-h-[100dvh]
           flex flex-col items-center justify-center
           px-6 py-20 pt-32
         "
@@ -510,13 +370,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           relative z-10
           max-w-4xl mx-auto
           text-center
-          transition-all duration-1000
           ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
         `}>
           <div className="mb-8">
             <span className="
               text-[10px] tracking-[0.4em] uppercase
-              text-neutral-600 font-medium
+              text-neutral-400 font-medium
             ">
               Introducing
             </span>
@@ -550,9 +409,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           </p>
 
           <div className={`
-            transition-all duration-700
             ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
-          `} style={{ transitionDelay: '200ms' }}>
+          `}>
             <CTAButton onClick={onEnter}>
               Start Translating
             </CTAButton>
@@ -565,9 +423,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           relative z-10
           w-full max-w-2xl mx-auto
           mt-16
-          transition-all duration-1000
           ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}
-        `} style={{ transitionDelay: '300ms' }}>
+        `}>
           <GlassCard isActive className="p-6 sm:p-8">
             <OmniShowcase />
           </GlassCard>
@@ -602,7 +459,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         <div className="text-center mb-20">
           <span className="
             text-[10px] tracking-[0.4em] uppercase
-            text-neutral-600 font-medium
+            text-neutral-400 font-medium
             block mb-4
           ">
             Capabilities
@@ -686,6 +543,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           CREATOR STATEMENT
           ================================================================ */}
       <CreatorStatement />
+      </main>
 
       {/* ================================================================
           ENHANCED FOOTER

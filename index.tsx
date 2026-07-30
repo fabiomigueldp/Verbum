@@ -16,9 +16,21 @@ root.render(
 );
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+
+      const checkForUpdate = () => {
+        if (document.visibilityState === 'visible' && navigator.onLine) {
+          void registration.update();
+        }
+      };
+
+      document.addEventListener('visibilitychange', checkForUpdate);
+      window.addEventListener('online', checkForUpdate);
+      window.setInterval(checkForUpdate, 60 * 60 * 1000);
+    } catch {
       // PWA enhancement only. The app remains fully usable if registration fails.
-    });
-  });
+    }
+  }, { once: true });
 }

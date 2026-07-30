@@ -64,8 +64,8 @@ ShardSkeleton.displayName = 'ShardSkeleton';
  */
 const ShardError = memo<{ message?: string; onRetry: () => void }>(({ message, onRetry }) => (
   <div className="flex flex-col items-center justify-center py-6 px-4 gap-3">
-    <AlertCircle size={18} className="text-red-400/60" />
-    <span className="text-[10px] text-red-400/70 uppercase tracking-[0.15em] text-center">
+    <AlertCircle size={18} className="text-neutral-400" />
+    <span className="text-[10px] text-neutral-400 uppercase tracking-[0.15em] text-center">
       {message || 'Indexing Failed'}
     </span>
     <button
@@ -109,7 +109,7 @@ const ActionZone = memo<{
       className={`
         p-1.5 rounded-md transform-gpu
         ${copied
-          ? 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/20'
+          ? 'text-neutral-200 bg-white/10 border border-white/20'
           : 'text-neutral-600 hover:text-neutral-200 bg-transparent hover:bg-white/5 border border-transparent'
         }
         transition-all duration-300
@@ -121,7 +121,7 @@ const ActionZone = memo<{
       style={{ transitionTimingFunction: PREMIUM_EASE }}
       title={copied ? 'Copied' : 'Copy Raw'}
     >
-      {copied ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}
+      {copied ? <Check size={12} className="text-neutral-200" /> : <Copy size={12} />}
     </button>
 
     {/* Delete Button */}
@@ -129,9 +129,9 @@ const ActionZone = memo<{
       onClick={onDelete}
       className={`
         p-1.5 rounded-md transform-gpu
-        text-neutral-600 hover:text-red-400
-        bg-transparent hover:bg-red-500/10
-        border border-transparent hover:border-red-500/20
+        text-neutral-600 hover:text-neutral-200
+        bg-transparent hover:bg-white/10
+        border border-transparent hover:border-white/20
         transition-all duration-300
         ${isVisible 
           ? 'opacity-100 translate-y-0 pointer-events-auto' 

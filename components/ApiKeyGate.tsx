@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Settings, Compass, Sparkles } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { getProvider } from '../services/providers';
@@ -19,16 +19,31 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({
   const providerConfig = getProvider(provider);
   const providerName = providerConfig?.name || provider;
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDismiss();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onDismiss]);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="api-key-gate-title"
+      aria-describedby="api-key-gate-description"
+    >
       {/* Soft backdrop — interface remains visible behind */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-500"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onDismiss}
+        aria-hidden="true"
       />
 
       <GlassCard
-        className="w-full max-w-sm relative animate-slide-up"
+        className="w-full max-w-sm relative"
         hoverEffect={false}
       >
         <div className="p-8 text-center">
@@ -38,12 +53,12 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({
           </div>
 
           {/* Title */}
-          <h3 className="text-sm font-medium text-white tracking-tight mb-2">
+          <h3 id="api-key-gate-title" className="text-sm font-medium text-white tracking-tight mb-2">
             Configure Model
           </h3>
 
           {/* Description */}
-          <p className="text-[11px] text-neutral-500 leading-relaxed max-w-[240px] mx-auto mb-8">
+          <p id="api-key-gate-description" className="text-[11px] text-neutral-500 leading-relaxed max-w-[240px] mx-auto mb-8">
             {isEnvKeyInvalid
               ? `The environment key for ${providerName} is invalid. Please configure a valid key in settings.`
               : `Select a provider and add an API key to enable neural translation.`
@@ -55,7 +70,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({
             <button
               onClick={onOpenSettings}
               className="
-                w-full py-3 px-4 rounded-xl
+                w-full min-h-11 py-3 px-4 rounded-xl
                 flex items-center justify-center gap-2
                 bg-white text-black
                 text-[10px] tracking-[0.2em] uppercase font-bold
@@ -71,7 +86,7 @@ export const ApiKeyGate: React.FC<ApiKeyGateProps> = ({
             <button
               onClick={onDismiss}
               className="
-                w-full py-3 px-4 rounded-xl
+                w-full min-h-11 py-3 px-4 rounded-xl
                 flex items-center justify-center gap-2
                 text-[10px] tracking-[0.15em] uppercase
                 text-neutral-600 hover:text-neutral-300

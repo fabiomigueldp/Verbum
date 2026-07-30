@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'verbum-v1';
+const CACHE_VERSION = 'verbum-v2';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const APP_SHELL_URLS = [
@@ -6,6 +6,7 @@ const APP_SHELL_URLS = [
   '/manifest.webmanifest',
   '/favicon.svg',
   '/icon-prism.svg',
+  '/icon-maskable.svg',
   '/icons/favicon-16x16.png',
   '/icons/favicon-32x32.png',
   '/icons/apple-touch-icon.png',
@@ -16,11 +17,22 @@ const APP_SHELL_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(APP_SHELL_CACHE)
-      .then((cache) => cache.addAll(APP_SHELL_URLS))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(APP_SHELL_CACHE);
+    const shellResponse = await fetch('/', { cache: 'reload' });
+    if (!shellResponse.ok) {
+      throw new Error('Unable to cache the Verbum app shell');
+    }
+    await cache.put('/', shellResponse);
+
+    await Promise.allSettled(
+      APP_SHELL_URLS.filter((url) => url !== '/').map(async (url) => {
+        const response = await fetch(url, { cache: 'reload' });
+        if (response.ok) await cache.put(url, response);
+      })
+    );
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
@@ -41,8 +53,22 @@ const isStaticAsset = (url) =>
   isSameOrigin(url) && (
     url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
+    url.pathname.endsWith('.svg') ||
     url.pathname === '/manifest.webmanifest'
   );
+
+const updateNavigationCache = async (request) => {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(APP_SHELL_CACHE);
+      await cache.put('/', response.clone());
+    }
+    return response;
+  } catch {
+    return null;
+  }
+};
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -52,13 +78,14 @@ self.addEventListener('fetch', (event) => {
 
   if (isNavigationRequest(request)) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(APP_SHELL_CACHE).then((cache) => cache.put('/', copy));
-          return response;
-        })
-        .catch(() => caches.match('/'))
+      caches.match('/').then(async (cached) => {
+        const networkUpdate = updateNavigationCache(request);
+        if (cached) {
+          event.waitUntil(networkUpdate);
+          return cached;
+        }
+        return (await networkUpdate) || Response.error();
+      })
     );
     return;
   }
@@ -68,8 +95,10 @@ self.addEventListener('fetch', (event) => {
       caches.match(request).then((cached) => {
         if (cached) return cached;
         return fetch(request).then((response) => {
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         });
       })
@@ -78,4 +107,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(fetch(request));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

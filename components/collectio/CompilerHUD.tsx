@@ -73,9 +73,9 @@ const AnimatedBanner = memo<{
   badge?: string;
 }>(({ isVisible, variant, icon, title, subtitle, badge }) => {
   const variantStyles = {
-    success: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', badgeBg: 'bg-emerald-500/10' },
-    warning: { bg: 'bg-amber-500/20', text: 'text-amber-400', badgeBg: 'bg-amber-500/10' },
-    info: { bg: 'bg-blue-500/20', text: 'text-blue-400', badgeBg: 'bg-blue-500/10' },
+    success: { bg: 'bg-white/15', text: 'text-neutral-100', badgeBg: 'bg-white/10' },
+    warning: { bg: 'bg-white/10', text: 'text-neutral-300', badgeBg: 'bg-white/[0.07]' },
+    info: { bg: 'bg-white/[0.07]', text: 'text-neutral-400', badgeBg: 'bg-white/[0.05]' },
   };
   
   const styles = variantStyles[variant];
@@ -144,7 +144,7 @@ const LiquidButton = memo<{
       px-4 py-2.5
       text-[11px] font-medium uppercase tracking-[0.15em]
       ${isActive 
-        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+        ? 'bg-white/15 text-white border border-white/30'
         : 'bg-neutral-200 text-neutral-900 hover:bg-white active:scale-[0.97]'
       }
       ${!isActive && 'shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_2px_8px_rgba(0,0,0,0.3)]'}
@@ -153,8 +153,8 @@ const LiquidButton = memo<{
     `,
     danger: `
       p-2
-      text-neutral-600 hover:text-red-400
-      bg-transparent hover:bg-red-500/10
+      text-neutral-600 hover:text-neutral-200
+      bg-transparent hover:bg-white/10
       disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-neutral-600
     `,
     ghost: `
@@ -299,7 +299,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
               <AnimatedBanner
                 isVisible={copied && !!lastManifest}
                 variant="success"
-                icon={<Sparkles size={14} className="text-emerald-400" />}
+                icon={<Sparkles size={14} className="text-neutral-200" />}
                 title={lastManifest?.title || ''}
                 subtitle={lastManifest ? `${lastManifest.suggestedFilename}.md • ${lastManifest.type}` : ''}
                 badge="Copied"
@@ -309,7 +309,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
               <AnimatedBanner
                 isVisible={!!storageError}
                 variant="warning"
-                icon={<AlertTriangle size={14} className="text-amber-400" />}
+                icon={<AlertTriangle size={14} className="text-neutral-400" />}
                 title={storageError || ''}
               />
 
@@ -317,14 +317,14 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
               <AnimatedBanner
                 isVisible={duplicateDetected}
                 variant="info"
-                icon={<Copy size={14} className="text-blue-400" />}
+                icon={<Copy size={14} className="text-neutral-400" />}
                 title="Duplicate content detected — shard skipped"
               />
 
               <AnimatedBanner
                 isVisible={copiedRaw}
                 variant="success"
-                icon={<Copy size={14} className="text-emerald-400" />}
+                icon={<Copy size={14} className="text-neutral-200" />}
                 title={copiedRawCount > 0 ? `${copiedRawCount} original shards copied` : 'Original shards copied'}
                 subtitle="raw text • separator ---"
                 badge="Copied"
@@ -395,7 +395,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                           transition-[opacity,transform,background-color,color,border-color,box-shadow]
                           duration-300 motion-reduce:transition-none
                           ${effectiveHasUndo
-                            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/16 hover:border-amber-500/30 hover:shadow-[0_0_16px_rgba(245,158,11,0.22)] active:scale-[0.97]'
+                            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto text-neutral-200 bg-white/10 border-white/20 hover:bg-white/[0.16] hover:border-white/30 hover:shadow-[0_0_16px_rgba(255,255,255,0.12)] active:scale-[0.97]'
                             : 'opacity-0 translate-y-1 scale-[0.98] pointer-events-none text-neutral-600 bg-transparent border-transparent'
                           }
                         `
@@ -470,14 +470,14 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                           transition-all duration-300 transform-gpu
                           whitespace-nowrap
                           ${copiedRaw
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            ? 'bg-white/10 text-neutral-200 border border-white/30'
                             : 'text-neutral-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.1]'
                           }
                         `}
                         style={{ transitionTimingFunction: PREMIUM_EASE }}
                         title="Copy Selected (Raw)"
                       >
-                        {copiedRaw ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        {copiedRaw ? <Check size={12} className="text-neutral-200" /> : <Copy size={12} />}
                         <span className="text-[9px] font-mono tabular-nums text-neutral-500">
                           {selectedReadyCount}
                         </span>
@@ -497,7 +497,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                       transition-all duration-300 transform-gpu
                       disabled:cursor-not-allowed
                       ${copied 
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                        ? 'bg-white/15 text-white border border-white/30'
                         : isCompiling
                           ? 'bg-neutral-700 text-neutral-300'
                           : 'bg-neutral-200 text-neutral-900 hover:bg-white active:scale-[0.97]'
@@ -520,7 +520,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                       </>
                     ) : copied ? (
                       <>
-                        <Check size={14} className="text-emerald-400" />
+                        <Check size={14} className="text-neutral-200" />
                         <span>Compiled</span>
                       </>
                     ) : selectedCount > 0 ? (

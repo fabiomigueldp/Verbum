@@ -61,7 +61,7 @@ export const OperationDetailModal: React.FC<OperationDetailModalProps> = ({ log,
                 Operation Details
               </span>
               {isError && (
-                <span className="flex items-center gap-1 text-[9px] text-red-400/80 uppercase tracking-[0.15em]">
+                <span className="flex items-center gap-1 text-[9px] text-neutral-300 uppercase tracking-[0.15em]">
                   <AlertTriangle size={10} />
                   Error
                 </span>
@@ -203,9 +203,9 @@ export const OperationDetailModal: React.FC<OperationDetailModalProps> = ({ log,
 
             {/* Error details */}
             {isError && log.errorMessage && (
-              <div className="bg-red-500/[0.06] border border-red-500/10 rounded-lg p-3">
-                <span className="text-[9px] uppercase tracking-[0.15em] text-red-400/60 block mb-1">Error</span>
-                <span className="text-[11px] text-red-300/80">{log.errorMessage}</span>
+              <div className="bg-white/[0.06] border border-white/10 rounded-lg p-3">
+                <span className="text-[9px] uppercase tracking-[0.15em] text-neutral-400 block mb-1">Error</span>
+                <span className="text-[11px] text-neutral-300">{log.errorMessage}</span>
               </div>
             )}
 

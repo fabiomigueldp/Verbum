@@ -582,7 +582,7 @@ export const RefineModal = ({
                             </div>
                             <button
                               onClick={() => onDeleteGlossaryEntry(entry.id)}
-                              className="p-1.5 text-neutral-700 hover:text-red-400 opacity-0 group-hover/entry:opacity-100 transition-all flex-shrink-0"
+                              className="p-1.5 text-neutral-700 hover:text-neutral-200 opacity-0 group-hover/entry:opacity-100 transition-all flex-shrink-0"
                               title="Remove"
                             >
                               <X size={12} />
@@ -756,7 +756,7 @@ export const RefineModal = ({
                       e.stopPropagation();
                       onDeleteCustomTone(tone.id);
                     }}
-                    className="absolute right-3 bottom-3 p-2 text-neutral-700 hover:text-red-400 opacity-0 group-hover/item:opacity-100 transition-all z-20"
+                    className="absolute right-3 bottom-3 p-2 text-neutral-700 hover:text-neutral-200 opacity-0 group-hover/item:opacity-100 transition-all z-20"
                     title="Delete Tone"
                   >
                     <Trash2 size={12} />

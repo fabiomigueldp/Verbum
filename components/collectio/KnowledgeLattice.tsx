@@ -36,16 +36,11 @@ const SectorHeader = memo<{
   count: number; 
   index: number;
 }>(({ domain, count, index }) => {
-  // Staggered animation delay based on sector index
-  const animationDelay = `${index * 80}ms`;
-  
   return (
-    <div 
+    <div
       className="
         flex items-center gap-4 mb-5
-        opacity-0 animate-[fadeSlideIn_0.5s_ease-out_forwards]
       "
-      style={{ animationDelay }}
     >
       {/* Leading line segment */}
       <div className="h-px flex-1 bg-white/[0.06]" />
@@ -93,16 +88,11 @@ const LatticeSector = memo<{
   selectedIds?: Set<string>;
   onToggleSelection?: (id: string) => void;
 }>(({ domain, shards, sectorIndex, globalOffset, onDelete, onRetry, selectedIds, onToggleSelection }) => {
-  // Staggered animation for entire sector
-  const sectorDelay = `${sectorIndex * 100}ms`;
-  
   return (
-    <div 
+    <div
       className="
         mb-10 last:mb-0
-        opacity-0 animate-[fadeIn_0.4s_ease-out_forwards]
       "
-      style={{ animationDelay: sectorDelay }}
     >
       <SectorHeader 
         domain={domain} 
@@ -144,7 +134,6 @@ const EmptyLattice = memo(() => (
     flex flex-col items-center justify-center 
     py-20 px-8
     text-center
-    opacity-0 animate-[fadeIn_0.6s_ease-out_0.2s_forwards]
   ">
     <div className="
       w-16 h-16 mb-6

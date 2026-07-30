@@ -8,7 +8,7 @@ import { Composer, ComposerRef } from './components/Composer';
 import { useCollectio } from './hooks/useCollectio';
 import { translateText, refineText, validateApiKey, validateProviderModel } from './services/aiRouter';
 import { getRequestLogById } from './services/core/telemetry';
-import { getFirstModelId, getProvider, getDefaultProviderId, isValidModelForProvider } from './services/providers';
+import { getFirstModelId, getProvider, isValidModelForProvider } from './services/providers';
 import { getPublicBuildTimeApiKey, hasPublicBuildTimeApiKey } from './services/core/env';
 import { migrateSettingsStorage, persistModelForProvider } from './services/core/storageMigrations';
 import { requestPersistentStorage, storageGet, storageSet, storageSetJson } from './services/core/storage';
@@ -25,6 +25,7 @@ import {
   GlossaryEntry,
 } from './types';
 import { calculateCostNano } from './utils/pricing';
+import LandingPage from './components/LandingPage';
 
 // ============================================================================
 // APP
@@ -32,7 +33,6 @@ import { calculateCostNano } from './utils/pricing';
 
 type AppMode = 'translation' | 'collectio';
 
-const LandingPage = lazy(() => import('./components/LandingPage'));
 const RefineModal = lazy(() => import('./components/RefineModal').then(module => ({ default: module.RefineModal })));
 const OperationDetailModal = lazy(() => import('./components/OperationDetailModal').then(module => ({ default: module.OperationDetailModal })));
 const RequestLogViewer = lazy(() => import('./components/RequestLogViewer').then(module => ({ default: module.RequestLogViewer })));
@@ -63,9 +63,11 @@ const DEFAULT_SESSION_STATS: UsageSession = {
   requestCount: 0,
 };
 
-const DEFAULT_PROVIDER = getDefaultProviderId();
-
 const App: React.FC = () => {
+  const [initialSettings] = useState(() => migrateSettingsStorage());
+  const initialApiKey = initialSettings.apiKeys[initialSettings.provider]?.trim()
+    || getPublicBuildTimeApiKey(initialSettings.provider);
+
   // -- Core Input / Translation --
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,10 +82,15 @@ const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('translation');
 
   // -- Landing Page --
-  const [showLanding, setShowLanding] = useState<boolean | null>(null);
+  const [showLanding, setShowLanding] = useState(
+    () => storageGet('verbum_has_launched') !== 'true'
+  );
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   // -- Auth (generic) --
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(
+    initialApiKey ? null : false
+  );
   const [isEnvKeyInvalid, setIsEnvKeyInvalid] = useState(false);
 
   // -- Settings --
@@ -96,12 +103,14 @@ const App: React.FC = () => {
   const [settingsFocus, setSettingsFocus] = useState<'engine' | null>(null);
 
   // -- Provider / Model (generic) --
-  const [provider, setProvider] = useState<ProviderOption>(DEFAULT_PROVIDER);
-  const [model, setModel] = useState<string>('gemini-3.5-flash-lite');
+  const [provider, setProvider] = useState<ProviderOption>(initialSettings.provider);
+  const [model, setModel] = useState<string>(initialSettings.activeModel);
 
   // -- API Keys (generic: Record<providerId, key>) --
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-  const [modelByProvider, setModelByProvider] = useState<Record<string, string>>({});
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>(initialSettings.apiKeys);
+  const [modelByProvider, setModelByProvider] = useState<Record<string, string>>(
+    initialSettings.modelByProvider
+  );
 
   // -- Session Stats --
   const [sessionStats, setSessionStats] = useState<UsageSession>(DEFAULT_SESSION_STATS);
@@ -152,21 +161,6 @@ const App: React.FC = () => {
 
 
 
-  // -- Landing --
-  useEffect(() => {
-    const hasSeenLanding = storageGet('verbum_has_launched');
-    setShowLanding(hasSeenLanding !== 'true');
-  }, []);
-
-  // -- Loading timeout — prevent infinite spinner if initialization hangs --
-  useEffect(() => {
-    if (showLanding !== null) return;
-    const timeout = setTimeout(() => {
-      setShowLanding(true);
-    }, 3000);
-    return () => clearTimeout(timeout);
-  }, [showLanding]);
-
   const handleEnterApp = useCallback(() => {
     storageSet('verbum_has_launched', 'true');
     void requestPersistentStorage();
@@ -179,17 +173,15 @@ const App: React.FC = () => {
     }
   }, [showLanding]);
 
-  // -- Settings migration / initial auth state --
   useEffect(() => {
-    const migrated = migrateSettingsStorage();
-    setApiKeys(migrated.apiKeys);
-    setProvider(migrated.provider);
-    setModelByProvider(migrated.modelByProvider);
-    setModel(migrated.activeModel);
-
-    const candidateKey = migrated.apiKeys[migrated.provider]?.trim()
-      || getPublicBuildTimeApiKey(migrated.provider);
-    setIsAuthorized(candidateKey ? null : false);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // -- Provider/model health check --
@@ -628,28 +620,22 @@ const App: React.FC = () => {
   const shouldRenderSkeleton = showSkeleton || isSkeletonExiting;
 
   // -- Render --
-  if (showLanding === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
-      </div>
-    );
-  }
-
   if (showLanding) {
-    return (
-      <Suspense fallback={(
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
-        </div>
-      )}>
-        <LandingPage onEnter={handleEnterApp} />
-      </Suspense>
-    );
+    return <LandingPage onEnter={handleEnterApp} />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
+    <main className="safe-area-shell min-h-screen min-h-[100dvh] flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto selection:bg-white/20 selection:text-white">
+
+      {!isOnline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed safe-area-top right-4 z-50 rounded-full border border-white/[0.08] bg-neutral-950/90 px-3 py-2 text-[11px] text-neutral-300 shadow-lg backdrop-blur-md"
+        >
+          Offline · saved work remains available
+        </div>
+      )}
 
       {/* Gentle API Key Prompt (non-blocking) */}
       {isAuthorized === false && (
@@ -748,8 +734,7 @@ const App: React.FC = () => {
 
       {/* Mode Toggle — hidden when Settings is open */}
       <div className={`
-        fixed top-6 left-1/2 -translate-x-1/2 z-40
-        transition-all duration-200 ease-out
+        fixed safe-area-top left-1/2 -translate-x-1/2 z-40
         ${showSettings ? 'opacity-0 pointer-events-none' : 'opacity-100'}
       `}>
         <div className="
@@ -758,13 +743,13 @@ const App: React.FC = () => {
           border border-white/[0.04]
           rounded-full
           shadow-[0_4px_24px_rgba(0,0,0,0.3)]
-        ">
+        " role="group" aria-label="Application mode">
           <button
             onClick={() => setAppMode('translation')}
+            aria-pressed={appMode === 'translation'}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full
+              flex min-h-11 items-center gap-2 px-4 py-2 rounded-full
               text-[10px] font-medium uppercase tracking-[0.15em]
-              transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
               ${appMode === 'translation'
                 ? 'bg-white/[0.1] text-white'
                 : 'text-neutral-500 hover:text-neutral-300'
@@ -776,10 +761,10 @@ const App: React.FC = () => {
           </button>
           <button
             onClick={() => setAppMode('collectio')}
+            aria-pressed={appMode === 'collectio'}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full
+              flex min-h-11 items-center gap-2 px-4 py-2 rounded-full
               text-[10px] font-medium uppercase tracking-[0.15em]
-              transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
               ${appMode === 'collectio'
                 ? 'bg-white/[0.1] text-white'
                 : 'text-neutral-500 hover:text-neutral-300'
@@ -911,7 +896,7 @@ const App: React.FC = () => {
         </Suspense>
       )}
 
-    </div>
+    </main>
   );
 };
 

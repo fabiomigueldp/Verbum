@@ -93,7 +93,7 @@ const ToolbarButton = memo<{
   children: React.ReactNode;
 }>(({ onClick, disabled, active, variant = 'ghost', title, className = '', children }) => {
   const baseStyles = `
-    relative overflow-hidden
+    relative min-h-11 min-w-11 overflow-hidden
     transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)]
     disabled:pointer-events-none
     focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20
@@ -123,11 +123,11 @@ const ToolbarButton = memo<{
       disabled:bg-neutral-800 disabled:text-neutral-600 disabled:shadow-none
     `,
     danger: `
-      text-red-400/80 bg-red-500/[0.08]
-      border border-red-500/20
-      hover:text-red-400 hover:bg-red-500/[0.12]
+      text-neutral-200 bg-white/[0.08]
+      border border-white/20
+      hover:text-white hover:bg-white/[0.12]
       active:scale-[0.97]
-      shadow-[0_0_15px_rgba(239,68,68,0.2)]
+      shadow-[0_0_15px_rgba(255,255,255,0.1)]
     `,
   };
 
@@ -136,6 +136,7 @@ const ToolbarButton = memo<{
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={title}
       className={`${baseStyles} ${variants[variant]} ${className}`}
     >
       {/* Magnetic glow effect on hover */}
@@ -308,7 +309,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
   const showDiffControls = originalInput && !isRefining;
 
   return (
-    <div className="w-full animate-[slideUp_500ms_cubic-bezier(0.16,1,0.3,1)_forwards]">
+    <div className="w-full">
       {/* ================================================================
           THE VESSEL - Premium Glass Card with Active State
           ================================================================ */}
@@ -377,6 +378,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                 placeholder="Enter text or use dictation..."
                 readOnly={isDisabled}
                 spellCheck={false}
+                aria-label="Text to translate"
                 dir={contentDirection}
                 className={`
                   w-full h-full 
@@ -460,7 +462,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                 onClick={onShowSettings}
                 title="Configure Languages"
                 className={`
-                  flex items-center gap-1
+                  flex min-h-11 items-center gap-1
                   px-2 py-1.5 rounded-md
                   text-[10px] font-medium tracking-[0.1em]
                   text-neutral-600
@@ -510,7 +512,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                 disabled={!hasContent || isDisabled || showDiff}
                 title={showDiff ? "Exit diff mode to enhance again" : "Refine Text"}
                 className={`
-                  flex items-center gap-2 px-4 py-2 rounded-full
+                  flex min-h-11 items-center gap-2 px-4 py-2 rounded-full
                   transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)]
                   focus:outline-none
                   
@@ -563,7 +565,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
               {isSpeechSupported && onToggleListening && (
                 <div className="flex items-center gap-3">
                   {isListening && (
-                    <span className="text-[10px] tracking-[0.2em] text-red-400/80 font-medium uppercase animate-pulse">
+                    <span className="text-[10px] tracking-[0.2em] text-neutral-300 font-medium uppercase animate-pulse">
                       REC
                     </span>
                   )}
@@ -576,7 +578,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
                   >
                     <div className="relative">
                       {isListening && (
-                        <span className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
+                        <span className="absolute inset-0 rounded-full bg-white/20 animate-ping" />
                       )}
                       <Mic size={18} className={isListening ? "animate-pulse" : ""} />
                     </div>

@@ -145,14 +145,7 @@ Spotlight.displayName = 'Spotlight';
 // PRIVACY SCHEMATIC CARD - CSS-only visualization
 // ============================================================================
 export const PrivacySchematic = memo(() => {
-  const [animationPhase, setAnimationPhase] = useState(0);
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAnimationPhase(prev => (prev + 1) % 4);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const animationPhase = 2;
 
   return (
     <div className="relative h-32 flex items-center justify-center">
@@ -164,11 +157,11 @@ export const PrivacySchematic = memo(() => {
             relative p-3 rounded-xl
             bg-white/[0.04] border border-white/[0.08]
             transition-all duration-500
-            ${animationPhase >= 1 ? 'border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : ''}
+            ${animationPhase >= 1 ? 'border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.06)]' : ''}
           `}>
             <Lock size={18} className={`
               transition-colors duration-500
-              ${animationPhase >= 1 ? 'text-emerald-500/80' : 'text-neutral-500'}
+              ${animationPhase >= 1 ? 'text-neutral-300' : 'text-neutral-500'}
             `} />
             <span className="
               absolute -bottom-5 left-1/2 -translate-x-1/2
@@ -184,13 +177,13 @@ export const PrivacySchematic = memo(() => {
             <div className={`
               h-px flex-1
               transition-all duration-500
-              ${animationPhase >= 2 ? 'bg-emerald-500/40' : 'bg-white/10'}
+              ${animationPhase >= 2 ? 'bg-white/40' : 'bg-white/10'}
             `} />
             <div className={`
               w-2 h-2 rounded-full border-2
               transition-all duration-500
               ${animationPhase >= 2 
-                ? 'border-emerald-500/60 bg-emerald-500/20' 
+                ? 'border-white/60 bg-white/20'
                 : 'border-white/20 bg-transparent'
               }
             `} />
@@ -201,7 +194,7 @@ export const PrivacySchematic = memo(() => {
             `}>
               {animationPhase >= 2 && (
                 <div className="flex items-center justify-center h-full">
-                  <span className="text-[8px] text-red-500/60">×</span>
+                  <span className="text-[8px] text-neutral-500">×</span>
                 </div>
               )}
             </div>
@@ -217,7 +210,7 @@ export const PrivacySchematic = memo(() => {
             <Server size={18} className="text-neutral-600" />
             {animationPhase >= 3 && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-8 h-px bg-red-500/50 rotate-45" />
+                <div className="w-8 h-px bg-neutral-500 rotate-45" />
               </div>
             )}
             <span className="
@@ -255,25 +248,17 @@ PrivacySchematic.displayName = 'PrivacySchematic';
 // LATENCY COUNTER CARD - Live oscillating ms
 // ============================================================================
 export const LatencyCounter = memo(() => {
-  const [targetMs, setTargetMs] = useState(67);
+  const targetMs = 54;
   const { formattedValue } = useRollingNumber(targetMs, { 
     duration: 400, 
     decimals: 0,
     easing: 'cubic'
   });
   
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Oscillate between 45-120ms for realistic feel
-      setTargetMs(Math.floor(45 + Math.random() * 75));
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
-
   const getLatencyColor = (ms: number) => {
-    if (ms < 60) return 'text-emerald-400';
-    if (ms < 90) return 'text-amber-400';
-    return 'text-orange-400';
+    if (ms < 60) return 'text-neutral-200';
+    if (ms < 90) return 'text-neutral-400';
+    return 'text-neutral-500';
   };
 
   return (
@@ -288,7 +273,7 @@ export const LatencyCounter = memo(() => {
         `}>
           {formattedValue}
         </span>
-        <span className="text-sm text-neutral-600 font-light">ms</span>
+        <span className="text-sm text-neutral-400 font-light">ms</span>
       </div>
       
       {/* Label */}
@@ -318,14 +303,7 @@ LatencyCounter.displayName = 'LatencyCounter';
 // MINI DIFF VIEWER
 // ============================================================================
 export const MiniDiffViewer = memo(() => {
-  const [showDiff, setShowDiff] = useState(true);
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setShowDiff(prev => !prev);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const showDiff = true;
 
   return (
     <div className="relative h-32 flex flex-col items-center justify-center px-4">
@@ -336,12 +314,12 @@ export const MiniDiffViewer = memo(() => {
           transition-all duration-500
           ${showDiff ? 'opacity-100' : 'opacity-40'}
         `}>
-          <span className="text-[10px] text-red-400/60 font-mono">−</span>
+          <span className="text-[10px] text-neutral-500 font-mono">−</span>
           <span className={`
             text-sm font-light
             transition-all duration-500
             ${showDiff 
-              ? 'text-neutral-500 line-through decoration-red-500/30' 
+              ? 'text-neutral-500 line-through decoration-neutral-600'
               : 'text-neutral-400'
             }
           `}>
@@ -355,7 +333,7 @@ export const MiniDiffViewer = memo(() => {
           transition-all duration-500
           ${showDiff ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
         `}>
-          <span className="text-[10px] text-emerald-400/60 font-mono">+</span>
+          <span className="text-[10px] text-neutral-300 font-mono">+</span>
           <span className="text-sm font-light text-[${TEXT_PRIMARY}]">
             I propose we convene
           </span>
@@ -390,23 +368,8 @@ const PIVOT_SEQUENCE: Array<{ source: string; target: string }> = [
 ];
 
 export const SmartPivotAnimation = memo(() => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isReversed, setIsReversed] = useState(false);
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsReversed(prev => {
-        if (!prev) {
-          return true;
-        } else {
-          // Move to next pair when completing a full cycle
-          setCurrentIndex(i => (i + 1) % PIVOT_SEQUENCE.length);
-          return false;
-        }
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const currentIndex = 0;
+  const isReversed = false;
 
   const currentPair = PIVOT_SEQUENCE[currentIndex];
   const sourceCode = isReversed ? currentPair.target : currentPair.source;
@@ -537,7 +500,7 @@ export const UseCaseSection = memo(() => {
       <div className="text-center mb-16">
         <span className="
           text-[10px] tracking-[0.4em] uppercase
-          text-neutral-600 font-medium
+          text-neutral-400 font-medium
           block mb-4
         ">
           Applications
@@ -615,7 +578,7 @@ export const UseCaseSection = memo(() => {
             <div className="mb-6">
               <span className="
                 text-[10px] tracking-[0.2em] uppercase
-                text-neutral-600 font-medium
+                text-neutral-400 font-medium
                 block mb-3
               ">
                 Input
@@ -636,7 +599,7 @@ export const UseCaseSection = memo(() => {
             <div>
               <span className="
                 text-[10px] tracking-[0.2em] uppercase
-                text-neutral-600 font-medium
+                text-neutral-400 font-medium
                 block mb-3
               ">
                 Output
@@ -975,14 +938,14 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
             <span className={`text-lg font-light tracking-tight text-[${TEXT_PRIMARY}] block mb-4`}>
               Verbum
             </span>
-            <p className="text-sm text-neutral-600 leading-relaxed">
+            <p className="text-sm text-neutral-400 leading-relaxed">
               Neural translation for people who care about precision.
             </p>
           </div>
           
           {/* Product */}
           <div>
-            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-500 font-medium block mb-4">
+            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium block mb-4">
               Product
             </span>
             <ul className="space-y-3">
@@ -990,8 +953,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
             <button 
               onClick={() => handleScrollTo('capabilities')}
               className="
-                text-sm text-neutral-600 text-left
-                hover:text-neutral-400
+                text-sm text-neutral-400 text-left
+                hover:text-white
                 transition-colors duration-300
               "
             >
@@ -1002,8 +965,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
             <button 
               onClick={() => handleScrollTo('collectio')}
               className="
-                text-sm text-neutral-600 text-left
-                hover:text-neutral-400
+                text-sm text-neutral-400 text-left
+                hover:text-white
                 transition-colors duration-300
               "
             >
@@ -1015,7 +978,7 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
           
           {/* Resources */}
           <div>
-            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-500 font-medium block mb-4">
+            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium block mb-4">
               Resources
             </span>
             <ul className="space-y-3">
@@ -1023,8 +986,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
                 <button 
                   onClick={() => handleScrollTo('use-cases')}
                   className="
-                    text-sm text-neutral-600 text-left
-                    hover:text-neutral-400
+                    text-sm text-neutral-400 text-left
+                    hover:text-white
                     transition-colors duration-300
                   "
                 >
@@ -1037,8 +1000,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="
-                    text-sm text-neutral-600
-                    hover:text-neutral-400
+                    text-sm text-neutral-400
+                    hover:text-white
                     transition-colors duration-300
                   "
                 >
@@ -1050,7 +1013,7 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
           
           {/* Legal */}
           <div>
-            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-500 font-medium block mb-4">
+            <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium block mb-4">
               Legal
             </span>
             <ul className="space-y-3">
@@ -1058,8 +1021,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
                 <button 
                   onClick={() => onOpenModal?.('privacy')}
                   className="
-                    text-sm text-neutral-600 text-left
-                    hover:text-neutral-400
+                    text-sm text-neutral-400 text-left
+                    hover:text-white
                     transition-colors duration-300
                   "
                 >
@@ -1070,8 +1033,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
                 <button 
                   onClick={() => onOpenModal?.('terms')}
                   className="
-                    text-sm text-neutral-600 text-left
-                    hover:text-neutral-400
+                    text-sm text-neutral-400 text-left
+                    hover:text-white
                     transition-colors duration-300
                   "
                 >
@@ -1082,8 +1045,8 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
                 <button 
                   onClick={() => onOpenModal?.('license')}
                   className="
-                    text-sm text-neutral-600 text-left
-                    hover:text-neutral-400
+                    text-sm text-neutral-400 text-left
+                    hover:text-white
                     transition-colors duration-300
                   "
                 >
@@ -1100,11 +1063,11 @@ export const EnhancedFooter = memo<EnhancedFooterProps>(({ onOpenModal }) => {
           flex flex-col sm:flex-row items-center justify-center gap-2
           text-center
         ">
-          <span className="text-[11px] tracking-[0.05em] text-neutral-600">
-            © 2025 Fábio Miguel Denda Pacheco
+          <span className="text-[11px] tracking-[0.05em] text-neutral-400">
+            © {new Date().getFullYear()} Fábio Miguel Denda Pacheco
           </span>
           <span className="hidden sm:inline text-neutral-700">·</span>
-          <span className="text-[11px] tracking-[0.05em] text-neutral-600">
+          <span className="text-[11px] tracking-[0.05em] text-neutral-400">
             MIT License
           </span>
         </div>
@@ -1199,7 +1162,7 @@ export const CollectioSection = memo(() => {
       `}>
         <span className="
           text-[10px] tracking-[0.4em] uppercase
-          text-neutral-600 font-medium
+          text-neutral-400 font-medium
           block mb-4
         ">
           Knowledge Management
@@ -1257,7 +1220,7 @@ export const CollectioSection = memo(() => {
           <GlassCard isActive className="p-5">
             {/* Domain group label */}
             <div className="mb-3">
-              <span className="text-[10px] tracking-[0.15em] uppercase text-neutral-600 font-medium">
+              <span className="text-[10px] tracking-[0.15em] uppercase text-neutral-400 font-medium">
                 Software Engineering
               </span>
             </div>
@@ -1327,7 +1290,7 @@ export const CollectioSection = memo(() => {
           { title: 'Temporary Storage', desc: 'Save text you will need later, indexed.' },
         ].map((item, i) => (
           <GlassCard key={i} hoverEffect className="p-5">
-            <h4 className="text-sm font-medium text-neutral-300 mb-2">{item.title}</h4>
+            <h3 className="text-sm font-medium text-neutral-300 mb-2">{item.title}</h3>
             <p className="text-xs text-neutral-600 font-light leading-relaxed">{item.desc}</p>
           </GlassCard>
         ))}
@@ -1343,14 +1306,7 @@ CollectioSection.displayName = 'CollectioSection';
 // ============================================================================
 
 export const GlossaryCard = memo(() => {
-  const [phase, setPhase] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPhase(prev => (prev + 1) % 3);
-    }, 2800);
-    return () => clearInterval(interval);
-  }, []);
+  const phase: number = 0;
 
   const terms = [
     { source: 'prazo', target: 'deadline', active: phase === 0 },
@@ -1409,20 +1365,13 @@ GlossaryCard.displayName = 'GlossaryCard';
 // ============================================================================
 
 export const ToneControlCard = memo(() => {
-  const [toneIndex, setToneIndex] = useState(0);
+  const toneIndex = 0;
 
   const tones = [
     { label: 'Executive', input: 'i think we should meet', output: 'I propose we convene' },
     { label: 'Concise', input: 'i think we should meet', output: "Let's meet." },
     { label: 'Diplomatic', input: 'i think we should meet', output: 'I suggest we schedule a discussion' },
   ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setToneIndex(prev => (prev + 1) % tones.length);
-    }, 3500);
-    return () => clearInterval(interval);
-  }, []);
 
   const current = tones[toneIndex];
 
@@ -1443,13 +1392,13 @@ export const ToneControlCard = memo(() => {
       {/* Diff */}
       <div className="w-full space-y-3">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-red-400/60 font-mono shrink-0">−</span>
-          <span className="text-sm font-light text-neutral-500 line-through decoration-red-500/30 truncate">
+          <span className="text-[10px] text-neutral-500 font-mono shrink-0">−</span>
+          <span className="text-sm font-light text-neutral-500 line-through decoration-neutral-600 truncate">
             {current.input}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-emerald-400/60 font-mono shrink-0">+</span>
+          <span className="text-[10px] text-neutral-300 font-mono shrink-0">+</span>
           <span className="text-sm font-light text-white bg-white/[0.06] rounded px-1.5 py-0.5 truncate">
             {current.output}
           </span>

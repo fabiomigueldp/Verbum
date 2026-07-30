@@ -214,7 +214,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
               </button>
               <button
                 onClick={handleClear}
-                className="p-2 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/[0.06] transition-all"
+                className="p-2 rounded-lg text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] transition-all"
                 title="Clear Logs"
               >
                 <Trash2 size={14} />
@@ -313,7 +313,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                                 {row.calls}
                               </span>
                               {row.errors > 0 && (
-                                <span className="text-[9px] text-red-400/60 ml-1">+{row.errors} err</span>
+                                <span className="text-[9px] text-neutral-400 ml-1">+{row.errors} err</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-right">
@@ -382,7 +382,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                           className={`
                             rounded-lg border transition-all duration-200
                             ${isError
-                              ? 'bg-red-500/[0.03] border-red-500/10 hover:border-red-500/20'
+                              ? 'bg-white/[0.03] border-white/10 hover:border-white/20'
                               : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.08]'
                             }
                           `}
@@ -395,7 +395,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                             <div className="flex items-center gap-3 min-w-0">
                               <span className="text-[10px] text-neutral-500 w-16 capitalize shrink-0">{log.operation}</span>
                               <span className="text-[11px] text-neutral-300 truncate">{log.model}</span>
-                              {isError && <AlertTriangle size={10} className="text-red-400/60 shrink-0" />}
+                              {isError && <AlertTriangle size={10} className="text-neutral-400 shrink-0" />}
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <span className="text-[10px] text-neutral-500 font-mono tabular-nums">{formatDuration(log.durationMs)}</span>
@@ -455,7 +455,7 @@ export const RequestLogViewer: React.FC<RequestLogViewerProps> = ({ onClose }) =
                               )}
 
                               {isError && log.errorMessage && (
-                                <p className="text-[10px] text-red-300/70">{log.errorMessage}</p>
+                                <p className="text-[10px] text-neutral-400">{log.errorMessage}</p>
                               )}
 
                               <span className="text-[9px] text-neutral-600 font-mono block pt-1">{log.id}</span>
