@@ -20,6 +20,8 @@ export interface ModelPricing {
   outputPer1M: number;
   /** Optional: context window threshold above which pricing changes */
   contextWindowThreshold?: number;
+  /** Whether the long-context rate starts at the threshold itself (rather than above it). */
+  contextWindowThresholdInclusive?: boolean;
   /** Optional pricing above the threshold */
   longContextInputPer1M?: number;
   longContextCachedInputPer1M?: number;
@@ -31,8 +33,10 @@ export type StructuredOutputKind = 'gemini_schema' | 'json_schema' | 'json_objec
 export type ReasoningMode =
   | 'gemini-minimal'
   | 'openai-none'
-  | 'openai-low'
+  | 'xai-disabled'
   | 'xai-none'
+  | 'cerebras-low'
+  | 'cerebras-none'
   | 'deepseek-disabled'
   | 'model-selected'
   | 'unsupported';
@@ -68,6 +72,8 @@ const PROVIDERS: Record<string, ProviderConfig> = {
   gemini: {
     id: 'gemini',
     name: 'Google Gemini',
+    // Pro preview is intentionally excluded: it does not support the minimal
+    // thinking level required by Verbum's latency and cost policy.
     models: [
       {
         id: 'gemini-3.5-flash-lite',
@@ -90,6 +96,13 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         pricing: { inputPer1M: 1.50, cachedInputPer1M: 0.15, outputPer1M: 9.00 },
         capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
       },
+      {
+        id: 'gemini-3.1-flash-lite',
+        label: 'Gemini 3.1 Flash-Lite',
+        desc: 'Stable low-latency model for high-volume translation until May 2027.',
+        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 1.50 },
+        capabilities: { api: 'gemini-sdk', structuredOutput: 'gemini_schema', reasoning: 'gemini-minimal' },
+      },
     ],
     keyPattern: /^AIza[0-9A-Za-z-_]{35}$/,
     keyUrl: 'https://aistudio.google.com/apikey',
@@ -103,12 +116,44 @@ const PROVIDERS: Record<string, ProviderConfig> = {
   xai: {
     id: 'xai',
     name: 'xAI Grok',
+    // Reasoning and multi-agent Grok variants are intentionally excluded until
+    // Verbum explicitly opts into provider reasoning tokens.
     models: [
+      {
+        id: 'grok-4.20-0309-non-reasoning',
+        label: 'Grok 4.20 (Non-Reasoning)',
+        desc: 'Current high-throughput Grok model with reasoning disabled.',
+        pricing: {
+          inputPer1M: 1.25,
+          cachedInputPer1M: 0.20,
+          outputPer1M: 2.50,
+          contextWindowThreshold: 200_000,
+          contextWindowThresholdInclusive: true,
+          longContextInputPer1M: 2.50,
+          longContextCachedInputPer1M: 0.40,
+          longContextOutputPer1M: 5.00,
+        },
+        capabilities: {
+          api: 'chat-completions',
+          structuredOutput: 'json_schema',
+          reasoning: 'xai-disabled',
+          realCostField: 'usage.cost_in_usd_ticks',
+        },
+      },
       {
         id: 'grok-4.3',
         label: 'Grok 4.3',
-        desc: 'Current general-purpose Grok model.',
-        pricing: { inputPer1M: 1.25, cachedInputPer1M: 0.20, outputPer1M: 2.50 },
+        desc: 'Stable Grok model supporting explicit non-reasoning mode.',
+        pricing: {
+          inputPer1M: 1.25,
+          cachedInputPer1M: 0.20,
+          outputPer1M: 2.50,
+          contextWindowThreshold: 200_000,
+          contextWindowThresholdInclusive: true,
+          longContextInputPer1M: 2.50,
+          longContextCachedInputPer1M: 0.40,
+          longContextOutputPer1M: 5.00,
+        },
         capabilities: {
           api: 'chat-completions',
           structuredOutput: 'json_schema',
@@ -129,14 +174,24 @@ const PROVIDERS: Record<string, ProviderConfig> = {
   openai: {
     id: 'openai',
     name: 'OpenAI',
+    // Pro variants are intentionally excluded because they require an explicit
+    // reasoning mode, which is outside Verbum's current default contract.
     models: [
       {
-        id: 'gpt-5.4-nano',
-        label: 'GPT-5.4 Nano',
-        desc: 'Lowest cost for simple translation.',
-        badge: 'Nano',
+        id: 'gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+        desc: 'Current GPT-5.6 model for cost-sensitive workloads.',
+        badge: 'Luna',
         badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
-        pricing: { inputPer1M: 0.20, cachedInputPer1M: 0.02, outputPer1M: 1.25 },
+        pricing: {
+          inputPer1M: 0.20,
+          cachedInputPer1M: 0.02,
+          outputPer1M: 1.20,
+          contextWindowThreshold: 272_000,
+          longContextInputPer1M: 0.40,
+          longContextCachedInputPer1M: 0.04,
+          longContextOutputPer1M: 1.80,
+        },
         capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
       {
@@ -149,18 +204,12 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
       {
-        id: 'gpt-5.6-luna',
-        label: 'GPT-5.6 Luna',
-        desc: 'Current GPT-5.6 model for cost-sensitive workloads.',
-        pricing: {
-          inputPer1M: 1.00,
-          cachedInputPer1M: 0.10,
-          outputPer1M: 6.00,
-          contextWindowThreshold: 272_000,
-          longContextInputPer1M: 2.00,
-          longContextCachedInputPer1M: 0.20,
-          longContextOutputPer1M: 9.00,
-        },
+        id: 'gpt-5.4-nano',
+        label: 'GPT-5.4 Nano',
+        desc: 'Previous low-cost model for simple translation.',
+        badge: 'Legacy',
+        badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
+        pricing: { inputPer1M: 0.20, cachedInputPer1M: 0.02, outputPer1M: 1.25 },
         capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
       {
@@ -168,13 +217,13 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         label: 'GPT-5.6 Terra',
         desc: 'Current GPT-5.6 balance of intelligence and cost.',
         pricing: {
-          inputPer1M: 2.50,
-          cachedInputPer1M: 0.25,
-          outputPer1M: 15.00,
+          inputPer1M: 2.00,
+          cachedInputPer1M: 0.20,
+          outputPer1M: 12.00,
           contextWindowThreshold: 272_000,
-          longContextInputPer1M: 5.00,
-          longContextCachedInputPer1M: 0.50,
-          longContextOutputPer1M: 22.50,
+          longContextInputPer1M: 4.00,
+          longContextCachedInputPer1M: 0.40,
+          longContextOutputPer1M: 18.00,
         },
         capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
@@ -207,7 +256,7 @@ const PROVIDERS: Record<string, ProviderConfig> = {
         badge: 'Legacy',
         badgeStyle: 'bg-neutral-900 text-neutral-400 border-white/10',
         pricing: { inputPer1M: 0.05, cachedInputPer1M: 0.005, outputPer1M: 0.40 },
-        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-low' },
+        capabilities: { api: 'responses', structuredOutput: 'json_schema', reasoning: 'openai-none' },
       },
       {
         id: 'gpt-5.5',
@@ -231,6 +280,55 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     adapter: async () => {
       const { OpenAIAdapter } = await import('./adapters/openaiAdapter');
       return new OpenAIAdapter();
+    },
+  },
+
+  cerebras: {
+    id: 'cerebras',
+    name: 'Cerebras',
+    // The public model catalog is the source of truth for availability and
+    // pricing. Deprecated Llama and Qwen aliases are intentionally excluded.
+    models: [
+      {
+        id: 'gemma-4-31b',
+        label: 'Gemma 4 31B',
+        desc: 'Current multimodal Gemma model with reasoning disabled by default.',
+        pricing: { inputPer1M: 0.99, outputPer1M: 1.49 },
+        capabilities: {
+          api: 'chat-completions',
+          structuredOutput: 'json_schema',
+          reasoning: 'cerebras-none',
+        },
+      },
+      {
+        id: 'gpt-oss-120b',
+        label: 'GPT OSS 120B',
+        desc: 'Production reasoning model running at Cerebras inference speed.',
+        pricing: { inputPer1M: 0.35, outputPer1M: 0.75 },
+        capabilities: {
+          api: 'chat-completions',
+          structuredOutput: 'json_schema',
+          reasoning: 'cerebras-low',
+        },
+      },
+      {
+        id: 'zai-glm-4.7',
+        label: 'Z.ai GLM 4.7',
+        desc: 'Preview coding and agentic model with reasoning explicitly disabled.',
+        pricing: { inputPer1M: 2.25, outputPer1M: 2.75 },
+        capabilities: {
+          api: 'chat-completions',
+          structuredOutput: 'json_schema',
+          reasoning: 'cerebras-none',
+        },
+      },
+    ],
+    keyPattern: /^csk-[A-Za-z0-9_-]+$/,
+    keyUrl: 'https://cloud.cerebras.ai/',
+    keyPlaceholder: 'csk-...',
+    adapter: async () => {
+      const { CerebrasAdapter } = await import('./adapters/cerebrasAdapter');
+      return new CerebrasAdapter();
     },
   },
 

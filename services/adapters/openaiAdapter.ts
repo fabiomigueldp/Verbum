@@ -22,7 +22,7 @@ import { getReasoningConfig } from '../core/reasoning';
 // ============================================================================
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
-const DEFAULT_MODEL = 'gpt-5.4-nano';
+const DEFAULT_MODEL = 'gpt-5.6-luna';
 
 const resolveApiKey = (apiKey?: string): string => {
   const key = apiKey?.trim();
@@ -39,6 +39,7 @@ const generateFallbackTitle = (text: string): string => {
 
 interface OpenAIPayload {
   model: string;
+  store: false;
   input: Array<{ role: string; content: string }>;
   text: {
     format: {
@@ -96,6 +97,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
       model,
+      store: false,
       input: [
         { role: 'system', content: systemInstruction },
         { role: 'user', content: buildSafetyEnvelope(text) },
@@ -128,6 +130,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
       model,
+      store: false,
       input: [
         { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
@@ -160,6 +163,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
       model,
+      store: false,
       input: [
         { role: 'system', content: buildIndexerInstruction(existingDomains) },
         { role: 'user', content: buildIndexerUserPrompt(text) },
@@ -214,6 +218,7 @@ export class OpenAIAdapter implements ProviderAdapter {
       const model = resolveModel(config?.model);
       const payload: OpenAIPayload = {
         model,
+        store: false,
         input: [
           { role: 'system', content: MANIFEST_SYSTEM_INSTRUCTION },
           { role: 'user', content: buildManifestUserPrompt(shards) },

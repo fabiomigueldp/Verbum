@@ -8,6 +8,7 @@ const PUBLIC_KEY_ENV: Record<string, string[]> = {
   gemini: ['VITE_VERBUM_GEMINI_API_KEY_DEV_ONLY'],
   xai: ['VITE_VERBUM_XAI_API_KEY_DEV_ONLY'],
   openai: ['VITE_VERBUM_OPENAI_API_KEY_DEV_ONLY'],
+  cerebras: ['VITE_VERBUM_CEREBRAS_API_KEY_DEV_ONLY'],
   deepseek: ['VITE_VERBUM_DEEPSEEK_API_KEY_DEV_ONLY'],
 };
 
@@ -30,4 +31,3 @@ export const getPublicBuildTimeApiKey = (providerId: string): string => {
 
 export const hasPublicBuildTimeApiKey = (providerId: string): boolean =>
   Boolean(getPublicBuildTimeApiKey(providerId));
-

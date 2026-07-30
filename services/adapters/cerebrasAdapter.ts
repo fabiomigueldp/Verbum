@@ -1,6 +1,19 @@
-import { LanguageConfig, ContextMessage, AiRuntimeConfig, IndexerResponse, ManifestResponse, ShardSummary } from '../../types';
+import {
+  LanguageConfig,
+  ContextMessage,
+  AiRuntimeConfig,
+  IndexerResponse,
+  ManifestResponse,
+  ShardSummary,
+} from '../../types';
 import { ProviderAdapter } from './baseAdapter';
-import { TranslationSchema, RefinementSchema, IndexerSchema, ManifestSchema, toOpenAIJsonSchema } from '../core/schemas';
+import {
+  TranslationSchema,
+  RefinementSchema,
+  IndexerSchema,
+  ManifestSchema,
+  toOpenAIJsonSchema,
+} from '../core/schemas';
 import {
   buildTranslationInstruction,
   buildContextBlock,
@@ -13,20 +26,24 @@ import {
   buildManifestUserPrompt,
   MANIFEST_SYSTEM_INSTRUCTION,
 } from '../core/prompts';
-import { normalizeOpenAIResponse, toNormalizedResponse, NormalizedResponse } from '../core/normalize';
+import {
+  normalizeOpenAIResponse,
+  toNormalizedResponse,
+  NormalizedResponse,
+} from '../core/normalize';
 import { getReasoningConfig } from '../core/reasoning';
 
 // ============================================================================
-// XAI ADAPTER
-// OpenAI-compatible REST API with json_schema strict support.
+// CEREBRAS ADAPTER
+// OpenAI-compatible Chat Completions API with strict structured outputs.
 // ============================================================================
 
-const XAI_API_BASE = 'https://api.x.ai/v1';
-const DEFAULT_MODEL = 'grok-4.20-0309-non-reasoning';
+const CEREBRAS_API_BASE = 'https://api.cerebras.ai/v1';
+const DEFAULT_MODEL = 'gemma-4-31b';
 
 const resolveApiKey = (apiKey?: string): string => {
   const key = apiKey?.trim();
-  if (!key) throw new Error('Missing API key for xAI.');
+  if (!key) throw new Error('Missing API key for Cerebras.');
   return key;
 };
 
@@ -37,22 +54,46 @@ const generateFallbackTitle = (text: string): string => {
   return cleaned.length === 30 ? `${cleaned}...` : cleaned;
 };
 
-interface XaiPayload {
+const removeUnsupportedSchemaKeywords = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(removeUnsupportedSchemaKeywords);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'description')
+      .map(([key, child]) => [key, removeUnsupportedSchemaKeywords(child)])
+  );
+};
+
+const toCerebrasJsonSchema = (
+  schema: Parameters<typeof toOpenAIJsonSchema>[0],
+  name: string
+): Record<string, unknown> =>
+  removeUnsupportedSchemaKeywords(
+    toOpenAIJsonSchema(schema, name)
+  ) as Record<string, unknown>;
+
+interface CerebrasPayload {
   model: string;
   temperature: number;
-  messages: Array<{ role: string; content: string }>;
+  max_completion_tokens: number;
+  messages: Array<{ role: 'system' | 'user'; content: string }>;
   response_format: {
     type: 'json_schema';
     json_schema: Record<string, unknown>;
   };
-  reasoning_effort?: 'none';
+  reasoning_effort?: 'none' | 'low';
 }
 
-const callXai = async (
+const callCerebras = async (
   apiKey: string,
-  payload: XaiPayload
+  payload: CerebrasPayload
 ): Promise<NormalizedResponse> => {
-  const response = await fetch(`${XAI_API_BASE}/chat/completions`, {
+  const response = await fetch(`${CEREBRAS_API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -63,7 +104,7 @@ const callXai = async (
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`xAI request failed: ${response.status} ${errorText}`);
+    throw new Error(`Cerebras request failed: ${response.status} ${errorText}`);
   }
 
   const data = await response.json();
@@ -71,7 +112,28 @@ const callXai = async (
   return toNormalizedResponse(raw, data);
 };
 
-export class XAIAdapter implements ProviderAdapter {
+const createPayload = (
+  model: string,
+  systemInstruction: string,
+  userPrompt: string,
+  schema: Parameters<typeof toOpenAIJsonSchema>[0],
+  schemaName: string
+): CerebrasPayload => ({
+  model,
+  ...getReasoningConfig('cerebras', model),
+  temperature: 0,
+  max_completion_tokens: 2048,
+  messages: [
+    { role: 'system', content: systemInstruction },
+    { role: 'user', content: userPrompt },
+  ],
+  response_format: {
+    type: 'json_schema',
+    json_schema: toCerebrasJsonSchema(schema, schemaName),
+  },
+});
+
+export class CerebrasAdapter implements ProviderAdapter {
   async translateText(
     text: string,
     langConfig: LanguageConfig,
@@ -88,21 +150,16 @@ export class XAIAdapter implements ProviderAdapter {
     }
 
     const model = resolveModel(config?.model);
-    const payload: XaiPayload = {
-      model,
-      ...getReasoningConfig('xai', model),
-      temperature: 0,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: buildSafetyEnvelope(text) },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: toOpenAIJsonSchema(TranslationSchema, 'translation_result'),
-      },
-    };
-
-    return callXai(resolveApiKey(config?.apiKey), payload);
+    return callCerebras(
+      resolveApiKey(config?.apiKey),
+      createPayload(
+        model,
+        systemInstruction,
+        buildSafetyEnvelope(text),
+        TranslationSchema,
+        'translation_result'
+      )
+    );
   }
 
   async refineText(
@@ -111,21 +168,16 @@ export class XAIAdapter implements ProviderAdapter {
     config?: AiRuntimeConfig
   ): Promise<NormalizedResponse> {
     const model = resolveModel(config?.model);
-    const payload: XaiPayload = {
-      model,
-      ...getReasoningConfig('xai', model),
-      temperature: 0,
-      messages: [
-        { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
-        { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: toOpenAIJsonSchema(RefinementSchema, 'refinement_result'),
-      },
-    };
-
-    return callXai(resolveApiKey(config?.apiKey), payload);
+    return callCerebras(
+      resolveApiKey(config?.apiKey),
+      createPayload(
+        model,
+        REFINEMENT_SYSTEM_INSTRUCTION,
+        buildRefinementUserPrompt(text, instruction),
+        RefinementSchema,
+        'refinement_result'
+      )
+    );
   }
 
   async indexText(
@@ -134,22 +186,18 @@ export class XAIAdapter implements ProviderAdapter {
     config?: AiRuntimeConfig
   ): Promise<IndexerResponse> {
     const model = resolveModel(config?.model);
-    const payload: XaiPayload = {
-      model,
-      ...getReasoningConfig('xai', model),
-      temperature: 0,
-      messages: [
-        { role: 'system', content: buildIndexerInstruction(existingDomains) },
-        { role: 'user', content: buildIndexerUserPrompt(text) },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: toOpenAIJsonSchema(IndexerSchema, 'indexer_result'),
-      },
-    };
-
-    const result = await callXai(resolveApiKey(config?.apiKey), payload);
+    const result = await callCerebras(
+      resolveApiKey(config?.apiKey),
+      createPayload(
+        model,
+        buildIndexerInstruction(existingDomains),
+        buildIndexerUserPrompt(text),
+        IndexerSchema,
+        'indexer_result'
+      )
+    );
     const parsed = JSON.parse(result.text);
+
     return {
       metadata: {
         title: parsed.title || generateFallbackTitle(text),
@@ -158,7 +206,6 @@ export class XAIAdapter implements ProviderAdapter {
         tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
       },
       usageMetadata: result.usage,
-      actualCostNano: result.actualCostNano,
     };
   }
 
@@ -179,34 +226,32 @@ export class XAIAdapter implements ProviderAdapter {
 
     try {
       const model = resolveModel(config?.model);
-      const payload: XaiPayload = {
-        model,
-        ...getReasoningConfig('xai', model),
-        temperature: 0,
-        messages: [
-          { role: 'system', content: MANIFEST_SYSTEM_INSTRUCTION },
-          { role: 'user', content: buildManifestUserPrompt(shards) },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: toOpenAIJsonSchema(ManifestSchema, 'manifest_result'),
-        },
-      };
-
-      const result = await callXai(resolveApiKey(config?.apiKey), payload);
+      const result = await callCerebras(
+        resolveApiKey(config?.apiKey),
+        createPayload(
+          model,
+          MANIFEST_SYSTEM_INSTRUCTION,
+          buildManifestUserPrompt(shards),
+          ManifestSchema,
+          'manifest_result'
+        )
+      );
       const parsed = JSON.parse(result.text);
       const validTypes = ['codebase', 'document', 'dataset', 'mixed'] as const;
-      const type = validTypes.includes(parsed.type) ? (parsed.type as typeof validTypes[number]) : 'mixed';
+      const type = validTypes.includes(parsed.type)
+        ? (parsed.type as typeof validTypes[number])
+        : 'mixed';
 
       return {
         manifest: {
           title: parsed.title || fallbackManifest.title,
           type,
           description: parsed.description || fallbackManifest.description,
-          suggestedFilename: parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || fallbackManifest.suggestedFilename,
+          suggestedFilename:
+            parsed.suggestedFilename?.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+            || fallbackManifest.suggestedFilename,
         },
         usageMetadata: result.usage,
-        actualCostNano: result.actualCostNano,
       };
     } catch (error) {
       console.error('Manifest generation error:', error);
@@ -216,7 +261,7 @@ export class XAIAdapter implements ProviderAdapter {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const response = await fetch(`${XAI_API_BASE}/models`, {
+      const response = await fetch(`${CEREBRAS_API_BASE}/models`, {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       return response.ok;
@@ -227,14 +272,11 @@ export class XAIAdapter implements ProviderAdapter {
 
   async validateModel(apiKey: string, model: string): Promise<boolean> {
     try {
-      const response = await fetch(`${XAI_API_BASE}/models`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (!response.ok) return false;
-      const data = await response.json();
-      const models = Array.isArray(data?.data) ? data.data : [];
-      if (models.length === 0) return true;
-      return models.some((entry: any) => entry?.id === resolveModel(model));
+      const response = await fetch(
+        `${CEREBRAS_API_BASE}/models/${encodeURIComponent(resolveModel(model))}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } }
+      );
+      return response.ok;
     } catch {
       return false;
     }

@@ -141,7 +141,7 @@ export interface ContextMessage {
 /** Provider ID — extensible registry string. Formerly: 'gemini' | 'xai' */
 export type ProviderOption = string;
 
-export const XAI_MODEL_ID = 'grok-4-1-fast-non-reasoning' as const;
+export const XAI_MODEL_ID = 'grok-4.20-0309-non-reasoning' as const;
 
 /** Extensible model option. Specific IDs are validated at runtime via the provider registry. */
 export type ModelOption = string;

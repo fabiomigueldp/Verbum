@@ -21,12 +21,14 @@ const REASONING_CONFIGS: Record<ReasoningMode, ReasoningConfig | undefined> = {
       effort: 'none' as const,
     },
   },
-  'openai-low': {
-    reasoning: {
-      effort: 'low' as const,
-    },
-  },
+  'xai-disabled': undefined,
   'xai-none': {
+    reasoning_effort: 'none' as const,
+  },
+  'cerebras-low': {
+    reasoning_effort: 'low' as const,
+  },
+  'cerebras-none': {
     reasoning_effort: 'none' as const,
   },
   'deepseek-disabled': {

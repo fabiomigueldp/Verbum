@@ -8,14 +8,14 @@ const DEFAULT_MODEL_ID = 'gemini-3.5-flash-lite';
  */
 const resolvePricing = (modelId: string) => {
   // Find pricing across all providers
-  const providers = ['gemini', 'xai', 'openai', 'deepseek'];
-  for (const providerId of providers) {
-    const pricing = getModelPricing(providerId, modelId);
+  const providers = getAllProviders();
+  for (const provider of providers) {
+    const pricing = getModelPricing(provider.id, modelId);
     if (pricing) return pricing;
   }
   // Fallback to default
-  for (const providerId of providers) {
-    const pricing = getModelPricing(providerId, DEFAULT_MODEL_ID);
+  for (const provider of providers) {
+    const pricing = getModelPricing(provider.id, DEFAULT_MODEL_ID);
     if (pricing) return pricing;
   }
   // Ultimate fallback
@@ -66,7 +66,9 @@ export const calculateCostBreakdown = (modelId: string, input: CostInput): CostB
   const pricing = resolvePricing(modelId);
   const useLongContext = Boolean(
     pricing.contextWindowThreshold &&
-    input.inputTokens > pricing.contextWindowThreshold
+    (pricing.contextWindowThresholdInclusive
+      ? input.inputTokens >= pricing.contextWindowThreshold
+      : input.inputTokens > pricing.contextWindowThreshold)
   );
 
   const inputRate = useLongContext && pricing.longContextInputPer1M !== undefined
