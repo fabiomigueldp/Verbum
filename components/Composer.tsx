@@ -69,6 +69,7 @@ interface ComposerProps {
   
   // Feature flags
   autoEnhance?: boolean;
+  naturalProse?: boolean;
   contextEnabled?: boolean;
   
   // Language Matrix
@@ -256,6 +257,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
   onApplyEnhancement,
   onToggleListening,
   autoEnhance = false,
+  naturalProse = false,
   contextEnabled = false,
   anchorLanguage = 'pt',
   targetLanguage = 'en',
@@ -483,7 +485,7 @@ export const Composer = memo(forwardRef<ComposerRef, ComposerProps>(({
               {/* Settings Button */}
               <ToolbarButton
                 onClick={onShowSettings}
-                active={autoEnhance || contextEnabled}
+                active={autoEnhance || naturalProse || contextEnabled}
                 variant="ghost"
                 title="Settings"
                 className="p-3 rounded-full"

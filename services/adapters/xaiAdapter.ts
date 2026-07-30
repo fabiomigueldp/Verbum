@@ -5,8 +5,9 @@ import {
   buildTranslationInstruction,
   buildContextBlock,
   buildToneOverride,
+  buildNaturalProseInstruction,
   buildSafetyEnvelope,
-  REFINEMENT_SYSTEM_INSTRUCTION,
+  buildRefinementSystemInstruction,
   buildRefinementUserPrompt,
   buildIndexerInstruction,
   buildIndexerUserPrompt,
@@ -86,6 +87,7 @@ export class XAIAdapter implements ProviderAdapter {
     if (refinementInstruction) {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
+    systemInstruction += buildNaturalProseInstruction(config?.naturalProse);
 
     const model = resolveModel(config?.model);
     const payload: XaiPayload = {
@@ -116,7 +118,7 @@ export class XAIAdapter implements ProviderAdapter {
       ...getReasoningConfig('xai', model),
       temperature: 0,
       messages: [
-        { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
+        { role: 'system', content: buildRefinementSystemInstruction(config?.naturalProse) },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
       ],
       response_format: {

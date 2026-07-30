@@ -154,6 +154,8 @@ export interface AiRuntimeConfig {
   telemetryId?: string;
   /** Whether the personal glossary is enabled for this translation */
   glossaryEnabled?: boolean;
+  /** Whether outputs should follow the Natural Prose writing constraint */
+  naturalProse?: boolean;
 }
 
 // ============================================================================

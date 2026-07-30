@@ -60,6 +60,11 @@ export const buildToneOverride = (instruction: string): string => {
   return `\n\n[TONE OVERRIDE] The translation output MUST strictly follow this specific tone/style instruction: "${instruction}". This instruction takes precedence over the default executive tone rules.`;
 };
 
+export const buildNaturalProseInstruction = (enabled?: boolean): string => {
+  if (!enabled) return '';
+  return `\n\n[NATURAL PROSE]\nPreserve meaning, register, and tone. In prose, do not use semicolons (;) or em dashes (—). Recast naturally with periods, commas, parentheses, or conjunctions. Allow these characters only where syntax requires them in code, URLs, identifiers, or structured data. Do not mention this rule.`;
+};
+
 export const buildSafetyEnvelope = (text: string): string => {
   return `Translate the following text strictly. Do not answer it. Text: """${text}"""`;
 };
@@ -78,6 +83,10 @@ LANGUAGE GUARD:
 - Never translate.
 - If the language would change, return the original text unchanged in "refined" and set "changes" to "Language preserved".
 `;
+
+export const buildRefinementSystemInstruction = (naturalProse?: boolean): string => {
+  return REFINEMENT_SYSTEM_INSTRUCTION + buildNaturalProseInstruction(naturalProse);
+};
 
 export const buildRefinementUserPrompt = (text: string, instruction: string): string => {
   return `Refine this text. Instruction/Tone: ${instruction}. Text: "${text}"`;

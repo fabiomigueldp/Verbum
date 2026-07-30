@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Check, X, Plus, Trash2, Zap, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe, BookOpen } from 'lucide-react';
+import { Check, X, Plus, Trash2, Zap, Feather, Link, Boxes, KeyRound, Eye, EyeOff, ChevronDown, Globe, BookOpen } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { ProviderSelector } from './ProviderSelector';
 import { ModelSelector } from './ModelSelector';
@@ -15,6 +15,8 @@ interface RefineModalProps {
   customTones: CustomTone[];
   autoEnhance: boolean;
   onToggleAutoEnhance: (enabled: boolean) => void;
+  naturalProse: boolean;
+  onToggleNaturalProse: (enabled: boolean) => void;
   contextEnabled: boolean;
   onToggleContext: (enabled: boolean) => void;
   contextDepth: number;
@@ -58,6 +60,8 @@ export const RefineModal = ({
   customTones,
   autoEnhance,
   onToggleAutoEnhance,
+  naturalProse,
+  onToggleNaturalProse,
   contextEnabled,
   onToggleContext,
   contextDepth,
@@ -430,9 +434,9 @@ export const RefineModal = ({
               )}
             </div>
 
-            {/* Auto-Enhance Toggle */}
-            <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-              <div className="flex items-center justify-between">
+            {/* Writing Preferences */}
+            <div className="bg-white/5 rounded-xl border border-white/5 divide-y divide-white/5">
+              <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-full ${autoEnhance ? 'bg-white/20 text-white' : 'bg-neutral-800 text-neutral-500'}`}>
                     <Zap size={16} className={autoEnhance ? 'fill-current' : ''} />
@@ -445,15 +449,36 @@ export const RefineModal = ({
 
                 <button
                   onClick={() => onToggleAutoEnhance(!autoEnhance)}
-                  className={`
-                    w-11 h-6 rounded-full transition-colors duration-300 relative
-                    ${autoEnhance ? 'bg-white' : 'bg-neutral-800'}
-                  `}
+                  aria-label="Toggle Auto-Enhance"
+                  aria-pressed={autoEnhance}
+                  className="w-11 h-11 -my-2 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
                 >
-                  <div className={`
-                    absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-300
-                    ${autoEnhance ? 'translate-x-5 bg-black' : 'bg-neutral-500'}
-                  `} />
+                  <span className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${autoEnhance ? 'bg-white' : 'bg-neutral-800'}`}>
+                    <span className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-200 ${autoEnhance ? 'translate-x-5 bg-black' : 'bg-neutral-500'}`} />
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${naturalProse ? 'bg-white/20 text-white' : 'bg-neutral-800 text-neutral-500'}`}>
+                    <Feather size={16} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-white block">Natural Prose</span>
+                    <span className="text-xs text-neutral-500 font-light">Avoid semicolons and em dashes</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => onToggleNaturalProse(!naturalProse)}
+                  aria-label="Toggle Natural Prose"
+                  aria-pressed={naturalProse}
+                  className="w-11 h-11 -my-2 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
+                >
+                  <span className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${naturalProse ? 'bg-white' : 'bg-neutral-800'}`}>
+                    <span className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-200 ${naturalProse ? 'translate-x-5 bg-black' : 'bg-neutral-500'}`} />
+                  </span>
                 </button>
               </div>
             </div>

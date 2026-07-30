@@ -97,6 +97,7 @@ const App: React.FC = () => {
   const [tone, setTone] = useState<ToneOption>('standard');
   const [customTones, setCustomTones] = useState<CustomTone[]>([]);
   const [autoEnhance, setAutoEnhance] = useState(false);
+  const [naturalProse, setNaturalProse] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(false);
   const [contextDepth, setContextDepth] = useState(64);
   const [showSettings, setShowSettings] = useState(false);
@@ -233,6 +234,10 @@ const App: React.FC = () => {
     if (savedAutoEnhance) {
       try { setAutoEnhance(JSON.parse(savedAutoEnhance)); } catch (e) { console.error("Auto Enhance parse error", e); }
     }
+    const savedNaturalProse = storageGet('verbum_natural_prose');
+    if (savedNaturalProse) {
+      try { setNaturalProse(JSON.parse(savedNaturalProse)); } catch (e) { console.error("Natural Prose parse error", e); }
+    }
     const savedContextEnabled = storageGet('verbum_context_enabled');
     if (savedContextEnabled) {
       try { setContextEnabled(JSON.parse(savedContextEnabled)); } catch (e) { console.error("Context Enabled parse error", e); }
@@ -301,6 +306,7 @@ const App: React.FC = () => {
 
   useEffect(() => { storageSetJson('verbum_custom_tones', customTones); }, [customTones]);
   useEffect(() => { storageSetJson('verbum_auto_enhance', autoEnhance); }, [autoEnhance]);
+  useEffect(() => { storageSetJson('verbum_natural_prose', naturalProse); }, [naturalProse]);
   useEffect(() => { storageSetJson('verbum_context_enabled', contextEnabled); }, [contextEnabled]);
   useEffect(() => { storageSetJson('verbum_context_depth', contextDepth); }, [contextDepth]);
   useEffect(() => { storageSet('verbum_provider', provider); }, [provider]);
@@ -410,7 +416,14 @@ const App: React.FC = () => {
       }
 
       const newId = uuidv4();
-      const result = await translateText(input, languageConfig, instruction, contextPayload, { model, apiKey: effectiveApiKey, provider, telemetryId: newId, glossaryEnabled });
+      const result = await translateText(input, languageConfig, instruction, contextPayload, {
+        model,
+        apiKey: effectiveApiKey,
+        provider,
+        telemetryId: newId,
+        glossaryEnabled,
+        naturalProse,
+      });
       updateSessionStats(result.usageMetadata, result.actualCostNano);
       const newRecord: TranslationRecord = {
         id: newId,
@@ -472,7 +485,12 @@ const App: React.FC = () => {
     const currentText = input;
 
     try {
-      const result = await refineText(currentText, instruction, { model, apiKey: effectiveApiKey, provider });
+      const result = await refineText(currentText, instruction, {
+        model,
+        apiKey: effectiveApiKey,
+        provider,
+        naturalProse,
+      });
       updateSessionStats(result.usageMetadata, result.actualCostNano);
       setOriginalInput(currentText);
       setInput(result.refined);
@@ -655,6 +673,8 @@ const App: React.FC = () => {
             customTones={customTones}
             autoEnhance={autoEnhance}
             onToggleAutoEnhance={setAutoEnhance}
+            naturalProse={naturalProse}
+            onToggleNaturalProse={setNaturalProse}
             contextEnabled={contextEnabled}
             onToggleContext={setContextEnabled}
             contextDepth={contextDepth}
@@ -801,6 +821,7 @@ const App: React.FC = () => {
               onApplyEnhancement={handleApplyEnhancement}
               onToggleListening={toggleListening}
               autoEnhance={autoEnhance}
+              naturalProse={naturalProse}
               contextEnabled={contextEnabled}
               anchorLanguage={anchorLanguage}
               targetLanguage={targetLanguage}

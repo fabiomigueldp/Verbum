@@ -5,8 +5,9 @@ import {
   buildTranslationInstruction,
   buildContextBlock,
   buildToneOverride,
+  buildNaturalProseInstruction,
   buildSafetyEnvelope,
-  REFINEMENT_SYSTEM_INSTRUCTION,
+  buildRefinementSystemInstruction,
   buildRefinementUserPrompt,
   buildIndexerInstruction,
   buildIndexerUserPrompt,
@@ -97,6 +98,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
     if (refinementInstruction) {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
+    systemInstruction += buildNaturalProseInstruction(config?.naturalProse);
 
     systemInstruction += `\n\nOUTPUT FORMAT EXAMPLE (you must return valid JSON matching this exact shape):\n${buildSchemaExample(langConfig.target)}`;
 
@@ -137,7 +139,7 @@ export class DeepSeekAdapter implements ProviderAdapter {
       detectedLanguage: 'en',
     });
 
-    const systemInstruction = `${REFINEMENT_SYSTEM_INSTRUCTION}\n\nOUTPUT FORMAT EXAMPLE:\n${schemaExample}`;
+    const systemInstruction = `${buildRefinementSystemInstruction(config?.naturalProse)}\n\nOUTPUT FORMAT EXAMPLE:\n${schemaExample}`;
 
     const model = resolveModel(config?.model);
     const payload: DeepSeekPayload = {

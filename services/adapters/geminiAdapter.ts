@@ -6,8 +6,9 @@ import {
   buildTranslationInstruction,
   buildContextBlock,
   buildToneOverride,
+  buildNaturalProseInstruction,
   buildSafetyEnvelope,
-  REFINEMENT_SYSTEM_INSTRUCTION,
+  buildRefinementSystemInstruction,
   buildRefinementUserPrompt,
   buildIndexerInstruction,
   buildIndexerUserPrompt,
@@ -78,6 +79,7 @@ export class GeminiAdapter implements ProviderAdapter {
     if (refinementInstruction) {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
+    systemInstruction += buildNaturalProseInstruction(config?.naturalProse);
 
     const userContent = buildSafetyEnvelope(text);
 
@@ -98,7 +100,7 @@ export class GeminiAdapter implements ProviderAdapter {
     return generate(
       resolveApiKey(config?.apiKey),
       resolveModel(config?.model),
-      REFINEMENT_SYSTEM_INSTRUCTION,
+      buildRefinementSystemInstruction(config?.naturalProse),
       buildRefinementUserPrompt(text, instruction),
       RefinementSchema
     );

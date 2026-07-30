@@ -5,8 +5,9 @@ import {
   buildTranslationInstruction,
   buildContextBlock,
   buildToneOverride,
+  buildNaturalProseInstruction,
   buildSafetyEnvelope,
-  REFINEMENT_SYSTEM_INSTRUCTION,
+  buildRefinementSystemInstruction,
   buildRefinementUserPrompt,
   buildIndexerInstruction,
   buildIndexerUserPrompt,
@@ -93,6 +94,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     if (refinementInstruction) {
       systemInstruction += buildToneOverride(refinementInstruction);
     }
+    systemInstruction += buildNaturalProseInstruction(config?.naturalProse);
 
     const model = resolveModel(config?.model);
     const payload: OpenAIPayload = {
@@ -132,7 +134,7 @@ export class OpenAIAdapter implements ProviderAdapter {
       model,
       store: false,
       input: [
-        { role: 'system', content: REFINEMENT_SYSTEM_INSTRUCTION },
+        { role: 'system', content: buildRefinementSystemInstruction(config?.naturalProse) },
         { role: 'user', content: buildRefinementUserPrompt(text, instruction) },
       ],
       text: {
