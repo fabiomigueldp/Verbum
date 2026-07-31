@@ -55,6 +55,43 @@ const STANDARD_TONES: { id: string; label: string; desc: string }[] = [
   { id: 'softer', label: 'Softer Tone', desc: 'Diplomatic, empathetic, and polite.' },
 ];
 
+interface ToggleSwitchProps {
+  checked: boolean;
+  label: string;
+  onToggle: () => void;
+}
+
+const ToggleSwitch = ({ checked, label, onToggle }: ToggleSwitchProps) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={label}
+    onClick={onToggle}
+    className="
+      flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full
+      focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50
+    "
+  >
+    <span
+      aria-hidden="true"
+      className={`
+        relative block h-6 w-11 shrink-0 overflow-hidden rounded-full
+        transition-colors duration-200 motion-reduce:transition-none
+        ${checked ? 'bg-white' : 'bg-neutral-800'}
+      `}
+    >
+      <span
+        className={`
+          absolute left-1 top-1 block h-4 w-4 rounded-full
+          transition-transform duration-200 motion-reduce:transition-none
+          ${checked ? 'translate-x-5 bg-black' : 'translate-x-0 bg-neutral-500'}
+        `}
+      />
+    </span>
+  </button>
+);
+
 export const RefineModal = ({
   currentTone,
   customTones,
@@ -137,6 +174,19 @@ export const RefineModal = ({
     }
   }, [initialFocus]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, []);
+
   if (isCreating) {
     return (
       <CustomToneModal
@@ -151,28 +201,47 @@ export const RefineModal = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto">
+    <div
+      className="
+        fixed inset-0 z-50 flex items-start justify-center overflow-hidden overscroll-none
+        p-3 pt-[max(0.75rem,env(safe-area-inset-top))]
+        pb-[max(0.75rem,env(safe-area-inset-bottom))]
+        sm:p-4
+      "
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
       />
 
-      <GlassCard className="w-full max-w-md max-h-[85vh] relative animate-slide-up bg-neutral-900/90" hoverEffect={false}>
-        <div className="p-6 flex flex-col min-h-0 max-h-[85vh]">
-          <div className="flex justify-between items-center mb-6 shrink-0">
-            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-neutral-400">
+      <GlassCard
+        className="
+          relative h-full max-h-full w-full max-w-md animate-slide-up bg-neutral-900/90
+          [&>div:last-child]:h-full [&>div:last-child]:min-h-0
+          sm:h-auto sm:max-h-[85vh]
+        "
+        hoverEffect={false}
+      >
+        <div className="flex h-full max-h-full min-h-0 flex-col p-5 sm:h-auto sm:max-h-[85vh] sm:p-6">
+          <div className="mb-4 flex shrink-0 items-center justify-between sm:mb-6">
+            <h3 id="settings-title" className="text-sm font-bold uppercase tracking-[0.2em] text-neutral-400">
               Settings
             </h3>
             <button
+              type="button"
               onClick={onClose}
-              className="text-neutral-500 hover:text-white transition-colors"
+              aria-label="Close settings"
+              className="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-neutral-500 transition-colors duration-200 hover:text-white sm:-mr-4"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="overflow-y-auto pr-2 -mr-2 space-y-5 custom-scrollbar flex-1 min-h-0">
+          <div className="-mr-2 min-h-0 flex-1 touch-pan-y space-y-5 overflow-y-auto overscroll-contain pr-2 custom-scrollbar [-webkit-overflow-scrolling:touch]">
 
             {/* ================================================================
                 ENGINE — Provider + Model + API Key
@@ -436,78 +505,61 @@ export const RefineModal = ({
 
             {/* Writing Preferences */}
             <div className="bg-white/5 rounded-xl border border-white/5 divide-y divide-white/5">
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className={`p-2 rounded-full ${autoEnhance ? 'bg-white/20 text-white' : 'bg-neutral-800 text-neutral-500'}`}>
                     <Zap size={16} className={autoEnhance ? 'fill-current' : ''} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium text-white block">Auto-Enhance</span>
                     <span className="text-xs text-neutral-500 font-light">Refine tone automatically</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onToggleAutoEnhance(!autoEnhance)}
-                  aria-label="Toggle Auto-Enhance"
-                  aria-pressed={autoEnhance}
-                  className="w-11 h-11 -my-2 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
-                >
-                  <span className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${autoEnhance ? 'bg-white' : 'bg-neutral-800'}`}>
-                    <span className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-200 ${autoEnhance ? 'translate-x-5 bg-black' : 'bg-neutral-500'}`} />
-                  </span>
-                </button>
+                <ToggleSwitch
+                  checked={autoEnhance}
+                  label="Toggle Auto-Enhance"
+                  onToggle={() => onToggleAutoEnhance(!autoEnhance)}
+                />
               </div>
 
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className={`p-2 rounded-full ${naturalProse ? 'bg-white/20 text-white' : 'bg-neutral-800 text-neutral-500'}`}>
                     <Feather size={16} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium text-white block">Natural Prose</span>
                     <span className="text-xs text-neutral-500 font-light">Avoid semicolons and em dashes</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onToggleNaturalProse(!naturalProse)}
-                  aria-label="Toggle Natural Prose"
-                  aria-pressed={naturalProse}
-                  className="w-11 h-11 -my-2 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
-                >
-                  <span className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${naturalProse ? 'bg-white' : 'bg-neutral-800'}`}>
-                    <span className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-200 ${naturalProse ? 'translate-x-5 bg-black' : 'bg-neutral-500'}`} />
-                  </span>
-                </button>
+                <ToggleSwitch
+                  checked={naturalProse}
+                  label="Toggle Natural Prose"
+                  onToggle={() => onToggleNaturalProse(!naturalProse)}
+                />
               </div>
             </div>
 
             {/* Smart Context Settings */}
             <div className="bg-white/5 rounded-xl p-4 border border-white/5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className={`p-2 rounded-full ${contextEnabled ? 'bg-white/20 text-white' : 'bg-neutral-800 text-neutral-500'}`}>
                     <Link size={16} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium text-white block">Smart Context</span>
                     <span className="text-xs text-neutral-500 font-light">Use history for context</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onToggleContext(!contextEnabled)}
-                  className={`
-                    w-11 h-6 rounded-full transition-colors duration-300 relative
-                    ${contextEnabled ? 'bg-white' : 'bg-neutral-800'}
-                  `}
-                >
-                  <div className={`
-                    absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-300
-                    ${contextEnabled ? 'translate-x-5 bg-black' : 'bg-neutral-500'}
-                  `} />
-                </button>
+                <ToggleSwitch
+                  checked={contextEnabled}
+                  label="Toggle Smart Context"
+                  onToggle={() => onToggleContext(!contextEnabled)}
+                />
               </div>
 
               {contextEnabled && (
@@ -536,52 +588,48 @@ export const RefineModal = ({
             {/* ================================================================
                 TERMINOLOGY — Personal Glossary
                 ================================================================ */}
-            <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowGlossary(!showGlossary)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left"
-              >
-                <div className="flex items-center gap-3">
+            <div className="overflow-hidden rounded-xl border border-white/5 bg-white/5">
+              <div className="flex min-h-16 w-full items-center gap-1 px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => setShowGlossary(!showGlossary)}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left"
+                  aria-expanded={showGlossary}
+                >
                   <div className="p-2 rounded-full bg-neutral-900 text-white border border-white/10">
                     <BookOpen size={16} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium text-white block">Terminology</span>
-                    <span className="text-xs text-neutral-500 font-light">
+                    <span className="block truncate text-xs font-light text-neutral-500">
                       {glossaryEnabled
                         ? `${currentPairEntries.length} ${currentPairEntries.length === 1 ? 'entry' : 'entries'} for ${anchorLanguage.toUpperCase()}↔${targetLanguage.toUpperCase()}`
                         : 'Disabled'}
                     </span>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Inline toggle */}
+                </button>
+
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <ToggleSwitch
+                    checked={glossaryEnabled}
+                    label={glossaryEnabled ? 'Disable glossary' : 'Enable glossary'}
+                    onToggle={onToggleGlossary}
+                  />
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleGlossary();
-                    }}
-                    className={`
-                      w-9 h-5 rounded-full transition-colors duration-300 relative flex-shrink-0
-                      ${glossaryEnabled ? 'bg-white' : 'bg-neutral-800'}
-                    `}
-                    title={glossaryEnabled ? 'Disable glossary' : 'Enable glossary'}
+                    type="button"
+                    onClick={() => setShowGlossary(!showGlossary)}
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-neutral-500 transition-colors duration-200 hover:text-white"
+                    aria-label={showGlossary ? 'Collapse terminology' : 'Expand terminology'}
+                    aria-expanded={showGlossary}
                   >
-                    <div className={`
-                      absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-300
-                      ${glossaryEnabled ? 'translate-x-4 bg-black' : 'bg-neutral-500'}
-                    `} />
-                  </button>
-                  <div className="flex items-center gap-2 text-neutral-500">
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Expand</span>
+                    <span className="hidden text-[10px] uppercase tracking-[0.2em] sm:inline">Expand</span>
                     <ChevronDown
                       size={16}
-                      className={`transition-transform ${showGlossary ? 'rotate-180 text-white' : ''}`}
+                      className={`transition-transform duration-200 ${showGlossary ? 'rotate-180 text-white' : ''}`}
                     />
-                  </div>
+                  </button>
                 </div>
-              </button>
+              </div>
 
               {showGlossary && (
                 <div className={`px-4 pt-3 pb-4 space-y-3 animate-fade-in border-t border-white/5 ${!glossaryEnabled ? 'opacity-40' : ''}`}>

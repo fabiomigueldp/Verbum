@@ -49,11 +49,11 @@ const StatBlock = memo<{
   label: string; 
   children: React.ReactNode;
 }>(({ label, children }) => (
-  <div className="flex flex-col items-center">
-    <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-neutral-600 mb-1">
+  <div className="flex min-w-0 flex-col items-center">
+    <span className="mb-1 whitespace-nowrap text-[7px] font-mono uppercase tracking-[0.14em] text-neutral-600 sm:text-[8px] sm:tracking-[0.2em]">
       {label}
     </span>
-    <div className="text-[13px] font-mono tabular-nums text-neutral-300">
+    <div className="max-w-full whitespace-nowrap text-[11px] font-mono tabular-nums text-neutral-300 sm:text-[13px]">
       {children}
     </div>
   </div>
@@ -82,7 +82,7 @@ const AnimatedBanner = memo<{
   
   return (
     <div 
-      className="grid transition-all duration-500 transform-gpu"
+      className="grid transform-gpu transition-all duration-200 motion-reduce:transition-none"
       style={{ 
         gridTemplateRows: isVisible ? '1fr' : '0fr',
         transitionTimingFunction: PREMIUM_EASE,
@@ -279,12 +279,12 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
   }, [hasSelectedReady, onCopySelectedRaw]);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-      <div className="max-w-4xl mx-auto px-4 pb-6">
+    <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-50">
+      <div className="mx-auto max-w-4xl px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6">
         {/* Liquid Container - morphs smoothly with content changes */}
         <div 
           ref={containerRef}
-          className="pointer-events-auto transition-all duration-500 transform-gpu"
+          className="pointer-events-auto transform-gpu transition-all duration-200 motion-reduce:transition-none"
           style={{ transitionTimingFunction: PREMIUM_EASE }}
         >
           <GlassCard 
@@ -292,7 +292,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
             className="overflow-hidden"
           >
             <div 
-              className="px-5 py-4 transition-all duration-400"
+              className="px-4 py-3 transition-all duration-200 motion-reduce:transition-none sm:px-5 sm:py-4"
               style={{ transitionTimingFunction: PREMIUM_EASE }}
             >
               {/* Success Banner - Animated */}
@@ -331,21 +331,21 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
               />
 
               {/* Main Content Row */}
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-6">
                 
                 {/* Stats Section - Stable anchor */}
-                <div className="flex items-center gap-4 md:gap-5 lg:gap-6 flex-wrap md:flex-nowrap min-w-0">
+                <div className="grid min-w-0 grid-cols-[0.7fr_1fr_1fr_1.6fr] items-center gap-1 md:flex md:flex-nowrap md:gap-5 lg:gap-6">
                   <StatBlock label="Shards">
                     <TokenCounter value={totalShards} duration={400} />
                   </StatBlock>
                   
-                  <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
+                  <div className="hidden h-8 w-px bg-white/[0.06] md:block" />
                   
                   <StatBlock label="Volume">
                     <TokenCounter value={totalTokens} duration={600} />
                   </StatBlock>
                   
-                  <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
+                  <div className="hidden h-8 w-px bg-white/[0.06] md:block" />
                   
                   <StatBlock label="Read Time">
                     <div className="flex items-center gap-1">
@@ -369,18 +369,57 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                   </StatBlock>
                 </div>
 
-                {/* Actions Section - Liquid layout */}
-                <div className="flex items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap shrink-0">
+                {/* Selection actions stay compact on mobile and preserve the desktop flow. */}
+                {(selectedCount > 0 || hasSelectedReady) && (
+                  <div className="flex min-h-11 items-center justify-end gap-2 md:hidden">
+                    {selectedCount > 0 && onDeselectAll && (
+                      <button
+                        onClick={onDeselectAll}
+                        className="
+                          flex h-11 items-center gap-1.5 rounded-lg border border-white/[0.06]
+                          bg-white/[0.04] px-3 text-[10px] font-medium uppercase tracking-[0.12em]
+                          text-neutral-400 transition-colors duration-200
+                        "
+                        title="Deselect All"
+                      >
+                        <X size={12} />
+                        <span className="text-[9px] font-mono tabular-nums text-neutral-500">{selectedCount}</span>
+                      </button>
+                    )}
+                    {hasSelectedReady && onCopySelectedRaw && (
+                      <button
+                        onClick={handleCopySelected}
+                        className={`
+                          flex h-11 items-center gap-1.5 rounded-lg border px-3
+                          text-[10px] font-medium uppercase tracking-[0.12em]
+                          transition-colors duration-200
+                          ${copiedRaw
+                            ? 'border-white/30 bg-white/10 text-neutral-200'
+                            : 'border-white/[0.06] bg-white/[0.04] text-neutral-400'
+                          }
+                        `}
+                        title="Copy Selected (Raw)"
+                      >
+                        {copiedRaw ? <Check size={12} /> : <Copy size={12} />}
+                        <span className="text-[9px] font-mono tabular-nums text-neutral-500">{selectedReadyCount}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Primary actions remain a single, stable row on narrow screens. */}
+                <div className="grid w-full shrink-0 grid-cols-[44px_44px_44px_minmax(0,1fr)] items-center gap-2 md:flex md:w-auto md:flex-nowrap md:gap-3">
                   <LiquidButton
                     onClick={onResetStats}
                     variant="ghost"
                     title="Reset Stats"
+                    className="h-11 w-11 md:h-auto md:w-auto"
                   >
                     <RotateCcw size={14} />
                   </LiquidButton>
 
                   {/* Undo Delete - Reserved slot, no layout shift */}
-                  <div className="relative w-8 h-8 shrink-0">
+                  <div className="relative h-11 w-11 shrink-0 md:h-8 md:w-8">
                     <button
                       onClick={onUndoDelete}
                       disabled={!effectiveHasUndo}
@@ -412,6 +451,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     disabled={!hasShards || isCompiling}
                     variant="danger"
                     title="Clear All Shards"
+                    className="h-11 w-11 md:h-auto md:w-auto"
                   >
                     <Trash2 size={14} />
                   </LiquidButton>
@@ -420,7 +460,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
 
                   {/* Deselect All - Slides in with count */}
                     <div 
-                      className="grid transition-all duration-400 transform-gpu"
+                      className="hidden transform-gpu transition-all duration-200 md:grid"
                       style={{ 
                         gridTemplateRows: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
                         gridTemplateColumns: selectedCount > 0 && onDeselectAll ? '1fr' : '0fr',
@@ -452,7 +492,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
 
                   {/* Copy Selected - Slides in */}
                   <div
-                    className="grid transition-all duration-400 transform-gpu"
+                    className="hidden transform-gpu transition-all duration-200 md:grid"
                     style={{
                       gridTemplateRows: hasSelectedReady && onCopySelectedRaw ? '1fr' : '0fr',
                       gridTemplateColumns: hasSelectedReady && onCopySelectedRaw ? '1fr' : '0fr',
@@ -490,12 +530,13 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                     onClick={handleCompile}
                     disabled={!hasReadyShards || isCompiling}
                     className={`
-                      flex items-center gap-2
-                      px-4 py-2.5
+                      flex h-11 min-w-0 items-center justify-center gap-2
+                      px-3 py-2.5 sm:px-4
                       text-[11px] font-medium uppercase tracking-[0.15em]
                       rounded-lg
-                      transition-all duration-300 transform-gpu
+                      transition-all duration-200 transform-gpu
                       disabled:cursor-not-allowed
+                      md:min-w-[170px]
                       ${copied 
                         ? 'bg-white/15 text-white border border-white/30'
                         : isCompiling
@@ -507,11 +548,7 @@ export const CompilerHUD: React.FC<CompilerHUDProps> = memo(({
                       disabled:bg-neutral-800 disabled:text-neutral-600 disabled:shadow-none
                       disabled:hover:bg-neutral-800
                     `}
-                    style={{ 
-                      transitionTimingFunction: PREMIUM_EASE,
-                      // Stable width to avoid layout shift
-                      minWidth: '170px',
-                    }}
+                    style={{ transitionTimingFunction: PREMIUM_EASE }}
                   >
                     {isCompiling ? (
                       <>

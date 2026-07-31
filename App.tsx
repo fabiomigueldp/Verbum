@@ -885,7 +885,7 @@ const App: React.FC = () => {
             />
           </div>
 
-          <div className="w-full pb-32">
+          <div className="w-full pb-56 md:pb-32">
             <KnowledgeLattice
               shards={collectio.shards}
               onDelete={collectio.deleteShard}
